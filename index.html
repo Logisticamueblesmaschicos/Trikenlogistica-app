@@ -146,6 +146,8 @@ select option{background:var(--surface);}
 html.dark .btn-primary{color:#fff;}
 .btn-primary:hover{filter:brightness(1.08);}
 .btn-outline{background:var(--surface2);border:1px solid var(--border);color:var(--text);}
+.btn-icon-del{background:none;border:none;cursor:pointer;font-size:14px;padding:4px 8px;border-radius:6px;opacity:.6;transition:all .15s;}
+.btn-icon-del:hover{opacity:1;background:rgba(220,38,38,.12);}
 .btn-outline:hover{border-color:var(--accent);color:var(--accent);}
 .btn-danger{background:none;border:1px solid var(--red);color:var(--red);}
 .btn-danger:hover{background:rgba(220,38,38,.08);}
@@ -463,6 +465,7 @@ tr:hover td{background:var(--surface2);}
         <button class="filter-btn" onclick="setFiltro('transito',this)">Tránsito</button>
         <button class="filter-btn" onclick="setFiltro('deposito',this)">Depósito</button>
       </div>
+      <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red);" onclick="reiniciarTodo()">🔄 Reiniciar todo</button>
     </div>
   </div>
   <div class="card"><div class="table-wrap"><div id="tabla-inventario"></div></div></div>
@@ -994,6 +997,79 @@ function mostrarConfirmacionLimpiar(aBorrar) {
   document.body.appendChild(overlay);
 }
 
+// Borra TODOS los productos, sin importar el estado (Fábrica, Tránsito o
+// Depósito) — para arrancar una prueba completamente desde cero. Doble
+// confirmación porque no se puede deshacer y afecta a todos los dispositivos
+// conectados si Firebase está configurado.
+function reiniciarTodo(){
+  if(!productos.length){ toast('No hay nada para reiniciar','error'); return; }
+  const overlay = document.createElement('div');
+  overlay.id = 'confirm-reset-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:440px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <span style="font-size:24px;">⚠️</span>
+        <h3 style="font-size:16px;font-weight:700;margin:0;">Reiniciar todo el sistema</h3>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:18px;">
+        Se van a borrar los <strong style="color:var(--text);">${productos.length}</strong> bultos existentes (Fábrica, Tránsito y Depósito). Esta acción <strong style="color:var(--red);">no se puede deshacer</strong>.
+      </p>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button class="btn btn-outline" onclick="document.getElementById('confirm-reset-overlay').remove()">Cancelar</button>
+        <button class="btn" style="background:var(--red);color:#fff;" onclick="mostrarConfirmacionReinicio2()">Continuar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+function mostrarConfirmacionReinicio2(){
+  const overlay = document.getElementById('confirm-reset-overlay');
+  if (overlay) overlay.remove();
+  const overlay2 = document.createElement('div');
+  overlay2.id = 'confirm-reset-overlay-2';
+  overlay2.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay2.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--red);border-radius:14px;max-width:440px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <span style="font-size:24px;">🛑</span>
+        <h3 style="font-size:16px;font-weight:700;margin:0;">Última confirmación</h3>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:18px;">
+        Esto borra <strong style="color:var(--text);">TODO</strong> el historial actual, para siempre. ¿Continuar?
+      </p>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button class="btn btn-outline" onclick="document.getElementById('confirm-reset-overlay-2').remove()">Cancelar</button>
+        <button class="btn" style="background:var(--red);color:#fff;" onclick="ejecutarReinicioTotal()">🔄 Sí, reiniciar todo</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay2);
+}
+async function ejecutarReinicioTotal(){
+  const overlay2 = document.getElementById('confirm-reset-overlay-2');
+  if (overlay2) overlay2.remove();
+  const aBorrar=productos.slice();
+  productos=[];
+  save();
+  updateStats();
+  renderInventario();
+  renderStockCards();
+  renderEtiquetas();
+  toast('🔄 Sistema reiniciado','success');
+
+  const db=window._db;
+  const fbReady=window._fbReady;
+  if(fbReady && db && window._fbFns){
+    const { doc, deleteDoc } = window._fbFns;
+    for(const p of aBorrar){
+      if(p._docId){
+        try{ await deleteDoc(doc(db,'bultos',p._docId)); }
+        catch(e){ console.error('Error borrando',p.codigo,e); }
+      }
+    }
+  }
+}
 async function ejecutarLimpiezaEtiquetas() {
   const overlay = document.getElementById('confirm-clear-overlay');
   if (overlay) overlay.remove();
@@ -1014,6 +1090,53 @@ async function ejecutarLimpiezaEtiquetas() {
         catch(e){ console.error('Error borrando',p.codigo,e); }
       }
     }
+  }
+}
+
+// Borra UN producto puntual sin importar en qué estado esté (fábrica, tránsito
+// o depósito) — para corregir errores de escaneo o pruebas, a diferencia de
+// "Limpiar" que solo afecta lo pendiente de imprimir.
+function eliminarProducto(codigo){
+  const p=productos.find(x=>x.codigo===codigo);
+  if(!p)return;
+  const overlay = document.createElement('div');
+  overlay.id = 'confirm-delete-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <span style="font-size:24px;">🗑</span>
+        <h3 style="font-size:16px;font-weight:700;margin:0;">Eliminar bulto</h3>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:18px;">
+        ¿Eliminar el bulto <strong style="color:var(--text);font-family:'Courier New',monospace;">${codigo}</strong> (${p.tipo})? Esta acción no se puede deshacer.
+      </p>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button class="btn btn-outline" onclick="document.getElementById('confirm-delete-overlay').remove()">Cancelar</button>
+        <button class="btn" style="background:var(--red);color:#fff;" onclick="ejecutarEliminarProducto('${codigo}')">🗑 Eliminar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+async function ejecutarEliminarProducto(codigo){
+  const overlay = document.getElementById('confirm-delete-overlay');
+  if (overlay) overlay.remove();
+  const p=productos.find(x=>x.codigo===codigo);
+  if(!p)return;
+  productos=productos.filter(x=>x.codigo!==codigo);
+  save();
+  updateStats();
+  renderInventario();
+  renderStockCards();
+  toast('🗑 Bulto eliminado','success');
+
+  const db=window._db;
+  const fbReady=window._fbReady;
+  if(fbReady && db && p._docId && window._fbFns){
+    const { doc, deleteDoc } = window._fbFns;
+    try{ await deleteDoc(doc(db,'bultos',p._docId)); }
+    catch(e){ console.error('Error borrando',codigo,e); }
   }
 }
 
@@ -1041,7 +1164,15 @@ function iniciarScanner(tipo){
   ).catch(()=>{toast('No se pudo acceder a la cámara','error');detenerScanner(tipo);});
 }
 function detenerScanner(tipo){
-  if(scanners[tipo]){scanners[tipo].stop().catch(()=>{}).finally(()=>{scanners[tipo]=null;});}
+  if(scanners[tipo]){
+    // html5-qrcode puede lanzar el error de forma síncrona (no como promesa
+    // rechazada) si .stop() se llama cuando el escáner ya no está corriendo.
+    try{
+      const p=scanners[tipo].stop();
+      if(p && typeof p.catch==='function') p.catch(()=>{});
+    }catch(e){ /* ya estaba detenido, se ignora */ }
+    scanners[tipo]=null;
+  }
   const prefix={salida:'sal',entrada:'ent',stock:'stk'}[tipo];
   const bs=document.getElementById('btn-scan-'+prefix);
   const bst=document.getElementById('btn-stop-'+prefix);
@@ -1158,7 +1289,7 @@ function renderInventario(){
   }).slice().reverse();
   const container=document.getElementById('tabla-inventario');
   if(!lista.length){container.innerHTML=`<div class="empty"><div class="empty-icon">📦</div>Sin resultados</div>`;return;}
-  container.innerHTML=`<table><thead><tr><th>Código MBT</th><th>Tipo</th><th>Cód.Centum</th><th>Producto</th><th>Bulto</th><th>Nº Pedido</th><th>Estado</th><th>Creado</th><th>Recibido</th></tr></thead>
+  container.innerHTML=`<table><thead><tr><th>Código MBT</th><th>Tipo</th><th>Cód.Centum</th><th>Producto</th><th>Bulto</th><th>Nº Pedido</th><th>Estado</th><th>Creado</th><th>Recibido</th><th></th></tr></thead>
   <tbody>${lista.map(p=>`<tr>
     <td style="font-family:'JetBrains Mono',monospace;font-size:10px;">${p.codigo}</td>
     <td>${p.tipoProd==='pedido'?`<span class="tipo-ped">PEDIDO</span>`:`<span class="tipo-stk">STOCK</span>`}</td>
@@ -1169,6 +1300,7 @@ function renderInventario(){
     <td>${estadoBadge(p.estado)}</td>
     <td style="font-size:10px;color:var(--muted);">${formatFecha(p.fechaCreacion)}</td>
     <td style="font-size:10px;color:var(--muted);">${p.fechaRecepcion?formatFecha(p.fechaRecepcion):'—'}</td>
+    <td><button class="btn-icon-del" title="Eliminar bulto" onclick="eliminarProducto('${p.codigo}')">🗑</button></td>
   </tr>`).join('')}</tbody></table>`;
 }
 
