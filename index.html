@@ -1193,6 +1193,26 @@ function parseCodigo(raw){
   return c.trim().toUpperCase();
 }
 
+// Para productos con varios bultos (ej. 3/5): al escanear uno, revisa si sus
+// "hermanos" (mismo producto + mismo pedido) todavía no avanzaron de estado,
+// para avisar que el pedido/stock queda incompleto hasta escanearlos a todos.
+function bultosPendientesGrupo(prod, estadoAnterior){
+  if(!prod.bultosTotal || prod.bultosTotal<=1) return null;
+  const hermanos = productos.filter(p=>
+    p.codigoCentum===prod.codigoCentum &&
+    p.bultosTotal===prod.bultosTotal &&
+    (prod.comprobante ? p.comprobante===prod.comprobante : true)
+  );
+  const pendientes = hermanos.filter(p=>p.estado===estadoAnterior).sort((a,b)=>a.bultoNum-b.bultoNum);
+  if(!pendientes.length) return null;
+  return { totalGrupo: hermanos.length, faltan: pendientes.length, numeros: pendientes.map(p=>p.bultoNum) };
+}
+function avisoBultosFaltantes(pend){
+  if(!pend) return '';
+  return `<div style="margin-top:8px;padding:8px 10px;background:rgba(234,88,12,.12);border:1px solid #ea580c;border-radius:8px;color:#ea580c;font-size:12px;font-weight:600;">
+    ⚠️ Faltan ${pend.faltan} de ${pend.totalGrupo} bultos de este pedido — bulto${pend.faltan>1?'s':''} ${pend.numeros.join(', ')}
+  </div>`;
+}
 async function procesarScan(raw,tipo){
   const codigo=parseCodigo(raw);
   const prod=productos.find(p=>p.codigo===codigo);
@@ -1208,18 +1228,22 @@ async function procesarScan(raw,tipo){
     if(prod.estado!=='fabrica'){resultEl.className='scan-result not-found';resultEl.innerHTML=estadoIncorrecto(prod,'No está en Fábrica');return;}
     prod.estado='transito';prod.fechaSalida=ahora.toISOString();
     await fbUpdate(prod);save();
+    const pendSalida=bultosPendientesGrupo(prod,'fabrica');
     resultEl.className='scan-result found';
-    resultEl.innerHTML=resultHTML('✅ Salida registrada',prod,[['Hora',formatHora(ahora)],['Estado',estadoBadge('transito')]]);
+    resultEl.innerHTML=resultHTML('✅ Salida registrada',prod,[['Hora',formatHora(ahora)],['Estado',estadoBadge('transito')]])+avisoBultosFaltantes(pendSalida);
     agregarFila('salidas',prod);
     toast(`🚛 ${prod.tipo}${prod.bultoNum?' — Bulto '+prod.bultoNum+'/'+prod.bultosTotal:''}`, 'success');
+    if(pendSalida) toast(`⚠️ Faltan ${pendSalida.faltan} bulto${pendSalida.faltan>1?'s':''} de este pedido`,'error');
   } else {
     if(prod.estado!=='transito'){resultEl.className='scan-result not-found';resultEl.innerHTML=estadoIncorrecto(prod,'No está en Tránsito');return;}
     prod.estado='deposito';prod.fechaRecepcion=ahora.toISOString();
     await fbUpdate(prod);save();
+    const pendEntrada=bultosPendientesGrupo(prod,'transito');
     resultEl.className='scan-result found';
-    resultEl.innerHTML=resultHTML('✅ Recepción confirmada',prod,[['Salió',formatFecha(prod.fechaSalida)],['Recibido',formatHora(ahora)],['Estado',estadoBadge('deposito')]]);
+    resultEl.innerHTML=resultHTML('✅ Recepción confirmada',prod,[['Salió',formatFecha(prod.fechaSalida)],['Recibido',formatHora(ahora)],['Estado',estadoBadge('deposito')]])+avisoBultosFaltantes(pendEntrada);
     agregarFila('entradas',prod);renderStockCards();
     toast(`🏭 Recibido: ${prod.tipo}`,'success');
+    if(pendEntrada) toast(`⚠️ Faltan ${pendEntrada.faltan} bulto${pendEntrada.faltan>1?'s':''} de este pedido`,'error');
   }
 }
 
