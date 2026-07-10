@@ -697,13 +697,10 @@ function renderImportPreview() {
       <span style="font-weight:500;font-size:12px;line-height:1.3;">${r.producto}</span>
       <span style="font-family:'JetBrains Mono',monospace;font-size:12px;">${r.cantidad}</span>
       <div class="bultos-ctrl">
-        ${r.tipo==='stock'
-          ? `<span style="font-size:11px;color:var(--muted);">${Math.ceil(r.cantidad)} etiq.</span>`
-          : `<button onclick="adjBultos(${i},-1)">−</button>
-             <input type="number" min="1" max="99" value="${r.bultos}" id="b-${i}" oninput="setBultos(${i},this.value)">
-             <button onclick="adjBultos(${i},1)">+</button>
-             <span style="font-size:11px;color:var(--accent);font-weight:700;" id="bc-${i}">${r.bultos}</span>`
-        }
+        <button onclick="adjBultos(${i},-1)">−</button>
+        <input type="number" min="1" max="99" value="${r.bultos}" id="b-${i}" oninput="setBultos(${i},this.value)">
+        <button onclick="adjBultos(${i},1)">+</button>
+        <span style="font-size:11px;color:var(--accent);font-weight:700;" id="bc-${i}">${r.bultos}</span>
       </div>
       <div style="display:flex;flex-direction:column;gap:2px;">
         <span class="${r.tipo==='pedido'?'tipo-ped':'tipo-stk'}">${r.tipo==='pedido'?'📦 PEDIDO':'🏭 STOCK'}</span>
@@ -737,7 +734,7 @@ function selectAll(v){
   updateImportTotal();
 }
 function updateImportTotal(){
-  const t=importRows.filter(r=>r.selected).reduce((a,r)=>a+(r.tipo==='stock'?Math.ceil(r.cantidad):r.bultos),0);
+  const t=importRows.filter(r=>r.selected).reduce((a,r)=>a+r.bultos,0);
   document.getElementById('import-bultos-total').textContent=t;
 }
 function limpiarImport(){importRows=[];document.getElementById('import-preview').style.display='none';}
@@ -768,11 +765,11 @@ async function generarEtiquetasDesdeImport() {
     const nuevos=[];
     sel.forEach(r=>{
       const esStock=r.tipo==='stock';
-      const cant=esStock?Math.ceil(r.cantidad):r.bultos;
+      const cant=r.bultos; // ahora también ajustable para stock, no solo Math.ceil(cantidad)
       // Solo usamos el detalle de la planilla de referencia si la cantidad de
       // bultos coincide exactamente con lo relevado (si no, podría asignarse
       // mal, ej. "Cab 1" a un bulto que en realidad es otra pieza).
-      const refDetalle=(!esStock && r.codigoCentum && DETALLE_BULTOS[r.codigoCentum] && DETALLE_BULTOS[r.codigoCentum].length===cant)?DETALLE_BULTOS[r.codigoCentum]:null;
+      const refDetalle=(r.codigoCentum && DETALLE_BULTOS[r.codigoCentum] && DETALLE_BULTOS[r.codigoCentum].length===cant)?DETALLE_BULTOS[r.codigoCentum]:null;
       for(let b=1;b<=cant;b++){
         base++;
         const seq=String(base).padStart(4,'0');
@@ -780,8 +777,8 @@ async function generarEtiquetasDesdeImport() {
         const p={
           codigo:`MBT-${year}-${seq}-${rnd}`,
           codigoCentum:r.codigoCentum, tipo:r.producto, tipoProd:r.tipo,
-          cantidadCentum:r.cantidad, bultoNum:esStock?null:b,
-          bultosTotal:esStock?null:r.bultos, detalleBulto:refDetalle?refDetalle[b-1]:null, seccion:r.seccion,
+          cantidadCentum:r.cantidad, bultoNum:b,
+          bultosTotal:cant, detalleBulto:refDetalle?refDetalle[b-1]:null, seccion:r.seccion,
           comprobante:r.comprobante, comprobanteId:r.comprobanteId||'',
           division:r.division||'', obs:r.obs,
           estado:'fabrica', fechaCreacion:new Date().toISOString(),
@@ -866,10 +863,7 @@ function buildLabelHTML(p){
     <div class="zl-producto">${p.tipo}</div>
     <div class="zl-mid">
       <div>
-        ${esPedido
-          ?`<div class="zl-bultos">BULTOS: <span>${p.bultoNum} / ${p.bultosTotal}</span></div>`
-          :`<div class="zl-bultos">CANT: <span>${p.cantidadCentum} ud.</span></div>`
-        }
+        <div class="zl-bultos">BULTOS: <span>${p.bultoNum} / ${p.bultosTotal}</span></div>
         ${p.detalleBulto?`<div class="zl-detalle">${p.detalleBulto.toUpperCase()}</div>`:''}
         ${esPedido
           ?`<div class="zl-comprobante">${p.comprobante||'—'}</div>`
