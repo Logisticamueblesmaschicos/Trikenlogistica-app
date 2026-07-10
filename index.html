@@ -662,7 +662,10 @@ function parseCentumWorkbook(wb) {
         const existente=importRows.find(r=>r.tipo==='stock' && r.codigoCentum===codigoNorm && r.seccion===currentSeccion);
         if(existente){
           existente.cantidad+=qty;
-          existente.bultos=Math.max(1,Math.ceil(existente.cantidad));
+          {
+            const refLen=DETALLE_BULTOS[codigoNorm]?.length;
+            existente.bultos=refLen?Math.max(1,Math.ceil(existente.cantidad))*refLen:Math.max(1,Math.ceil(existente.cantidad));
+          }
           continue;
         }
       }
@@ -671,7 +674,10 @@ function parseCentumWorkbook(wb) {
         seen[key]=true;
         importRows.push({
           codigoCentum:c0.toUpperCase(), producto:c1, cantidad:qty,
-          bultos:Math.max(1,Math.ceil(qty)),
+          bultos:(()=>{
+            const refLen=DETALLE_BULTOS[c0.toUpperCase()]?.length;
+            return refLen?Math.max(1,Math.ceil(qty))*refLen:Math.max(1,Math.ceil(qty));
+          })(),
           seccion:currentSeccion, comprobante:tipoProd==='pedido'?(numDoc||compId||''):'',
           comprobanteId:compId, division:String(row[12]||'').trim(),
           obs:'', tipo:tipoProd, selected:true
@@ -766,10 +772,12 @@ async function generarEtiquetasDesdeImport() {
     sel.forEach(r=>{
       const esStock=r.tipo==='stock';
       const cant=r.bultos; // ahora también ajustable para stock, no solo Math.ceil(cantidad)
-      // Solo usamos el detalle de la planilla de referencia si la cantidad de
-      // bultos coincide exactamente con lo relevado (si no, podría asignarse
-      // mal, ej. "Cab 1" a un bulto que en realidad es otra pieza).
-      const refDetalle=(r.codigoCentum && DETALLE_BULTOS[r.codigoCentum] && DETALLE_BULTOS[r.codigoCentum].length===cant)?DETALLE_BULTOS[r.codigoCentum]:null;
+      // Usamos el detalle de la planilla de referencia si la cantidad de bultos
+      // es exactamente ese desglose (1 unidad) o un múltiplo exacto (varias
+      // unidades completas, ej. 2 camas x 5 piezas = 10 bultos). Si no encaja
+      // ninguna de las dos, no se asigna detalle para no adjudicar mal una pieza.
+      const refBase=r.codigoCentum?DETALLE_BULTOS[r.codigoCentum]:null;
+      const refDetalle=(refBase && cant%refBase.length===0)?refBase:null;
       for(let b=1;b<=cant;b++){
         base++;
         const seq=String(base).padStart(4,'0');
@@ -778,7 +786,7 @@ async function generarEtiquetasDesdeImport() {
           codigo:`MBT-${year}-${seq}-${rnd}`,
           codigoCentum:r.codigoCentum, tipo:r.producto, tipoProd:r.tipo,
           cantidadCentum:r.cantidad, bultoNum:b,
-          bultosTotal:cant, detalleBulto:refDetalle?refDetalle[b-1]:null, seccion:r.seccion,
+          bultosTotal:cant, detalleBulto:refDetalle?refDetalle[(b-1)%refDetalle.length]:null, seccion:r.seccion,
           comprobante:r.comprobante, comprobanteId:r.comprobanteId||'',
           division:r.division||'', obs:r.obs,
           estado:'fabrica', fechaCreacion:new Date().toISOString(),
