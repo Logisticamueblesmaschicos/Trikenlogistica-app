@@ -642,27 +642,38 @@ function parseCentumWorkbook(wb) {
   const sh2=wb.Sheets['Sheet2']||wb.Sheets[wb.SheetNames[1]];
   if(!sh2){toast('No se encontró Sheet2','error');return;}
   const rows=XLSX.utils.sheet_to_json(sh2,{header:1,defval:''});
-  let currentSeccion='',currentComp='';
+  let currentSeccion='';
   const seen={};
   for(const row of rows){
     const c0=String(row[0]||'').trim();
     const c1=String(row[1]||'').trim();
     const c3=String(row[3]||'').trim();
-    const c12=String(row[12]||'').trim();
-    if(/^\d{4,}$/.test(c0)){currentSeccion=c3.toUpperCase();currentComp=c12;continue;}
-    if(/^[A-Z]{3}/.test(c0)&&c1){
+    if(/^\d{4,}$/.test(c0)){currentSeccion=c3.toUpperCase();continue;}
+    if(/^[A-Za-z]+\d+$/.test(c0)&&c1){
       const qty=parseFloat(String(row[3]||'0').replace(',','.'))||0;
-      const numDoc=String(row[12]||'').trim();
-      const compId=String(row[11]||'').trim();
+      const numDoc=String(row[11]||'').trim();
+      const compId=String(row[10]||'').trim();
       const tipoProd=currentSeccion.includes('PEDIDO')?'pedido':'stock';
-      const key=c0+'_'+currentComp;
+      // En STOCK el comprobante siempre viene vacío, así que un mismo código
+      // repetido varias veces en esa sección son movimientos DISTINTOS que hay
+      // que sumar (no descartar como si fueran filas duplicadas del reporte).
+      if(tipoProd==='stock'){
+        const codigoNorm=c0.toUpperCase();
+        const existente=importRows.find(r=>r.tipo==='stock' && r.codigoCentum===codigoNorm && r.seccion===currentSeccion);
+        if(existente){
+          existente.cantidad+=qty;
+          existente.bultos=Math.max(1,Math.ceil(existente.cantidad));
+          continue;
+        }
+      }
+      const key=c0.toUpperCase()+'_'+(numDoc||compId||'');
       if(!seen[key]){
         seen[key]=true;
         importRows.push({
-          codigoCentum:c0, producto:c1, cantidad:qty,
+          codigoCentum:c0.toUpperCase(), producto:c1, cantidad:qty,
           bultos:Math.max(1,Math.ceil(qty)),
           seccion:currentSeccion, comprobante:tipoProd==='pedido'?(numDoc||compId||''):'',
-          comprobanteId:compId, division:String(row[13]||'').trim(),
+          comprobanteId:compId, division:String(row[12]||'').trim(),
           obs:'', tipo:tipoProd, selected:true
         });
       }
