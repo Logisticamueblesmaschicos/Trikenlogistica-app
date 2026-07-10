@@ -235,6 +235,9 @@ tr:hover td{background:var(--surface2);}
 /* ===== ZEBRA LABEL ===== */
 .etiquetas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;}
 .zebra-label{width:377px;min-height:220px;background:#fff;border:1px solid #ccc;border-radius:4px;padding:4px 10px;font-family:'Arial',sans-serif;color:#000;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;transition:box-shadow .15s,border-color .15s;}
+.zl-del-btn{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(220,38,38,.9);color:#fff;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:5;opacity:.8;transition:opacity .15s;}
+.zl-del-btn:hover{opacity:1;}
+@media print{ .zl-del-btn{display:none!important;} }
 .etiquetas-grid .zebra-label:hover{box-shadow:0 4px 16px rgba(0,0,0,.15);border-color:var(--accent);}
 .zl-much-icon{width:62px;height:26px;flex-shrink:0;}
 .zl-much-icon img{width:100%;height:100%;object-fit:contain;}
@@ -836,6 +839,12 @@ function renderEtiquetas(){
     labelEl.style.cursor='pointer';
     labelEl.title='Clic para ampliar';
     labelEl.addEventListener('click', ()=>ampliarEtiqueta(p.codigo));
+    const delBtn=document.createElement('button');
+    delBtn.className='zl-del-btn';
+    delBtn.innerHTML='✕';
+    delBtn.title='Eliminar esta etiqueta';
+    delBtn.addEventListener('click', (ev)=>{ ev.stopPropagation(); eliminarProducto(p.codigo); });
+    labelEl.appendChild(delBtn);
     grid.appendChild(labelEl);
   });
   setTimeout(()=>{
