@@ -527,6 +527,11 @@ function storageSet(key, value) {
 // (ej. "Cab 2", "Cubo 1") en vez de solo el número genérico. Productos que no están
 // en esta tabla siguen mostrando el número genérico como antes.
 const DETALLE_BULTOS = {"MUECAM00303":["Cab 1","Cab 2","Cubo 1","Cubo 2","Barandas fun","Elasticos x2","Larguero doble filo","Larguero comun"],"MUECAM00033":["Cab sup","Cab inf","Elasticos x2","Larguero nido","Larguro comun"],"MUECAM00034":["Cab sup","Cab inf","Elasticos x2","Larguero nido","Larguro comun"],"MUECAM00030":["Cab sup","Cab inf","Elasticos x2","Larguero emotivo","Larguero comun"],"MUECAM00032":["Cab sup","Cab inf","Elasticos x2","Larguero emotivo+ 3ero","Larguero comun"],"MUECUN00035":["Cabeceras","Cubo 1","Cubo 2","Baranda de fun","Elastico","Larguero comun"],"MUECUN00036":["Cabeceras","Cubo 1","Cubo 2","Baranda de fun","Elastico","Larguero comun"],"MUECUN00033":["Cabeceras","Cubo 1","Cubo 2","Baranda de fun","Elastico","Larguero comun"],"MUECUN00034":["Cabeceras","Cubo 1","Cubo 2","Baranda de fun","Elastico","Larguero comun"],"MUECAM00299":["Cabeceras","Elastico","Larguero comun"],"MUECAM00301":["Cabeceras","Elastico","Larguero comun"],"MUECUN00014":["Cabeceras","Elastico","Larguero americano","Baranda de fun"],"MUECUN00055":["Cabeceras","Elastico","Larguero americano","Baranda de fun"],"MUECAM00015":["Cabeceras","Elastico","Larguero comun"],"MUECAM00016":["Cabeceras","Elastico","Larguero comun"],"MUECAM00013":["Cabeceras","Elastico","Larguero comun"],"MUECAM00014":["Cabeceras","Elastico","Larguero comun"],"MUECAM00026":["Cabeceras","Elastico","Larguero comun"],"MUECAM00164":["Cabeceras","Elastico","Larguero comun"],"MUECAM00098":["Cabeceras","Elastico","Larguero comun"],"MUECAM00218":["Cabeceras","Elastico","Larguero comun"],"MUECAM00099":["Cabeceras","Elastico","Larguero comun"],"MUECAM00219":["Cabeceras","Elastico","Larguero comun"],"MUECAM00093":["Cabeceras","Elastico","Larguero comun"],"MUECAM00137":["Cabeceras","Elastico","Larguero comun"],"MUECAM00094":["Cabeceras","Elastico","Larguero comun"],"MUECAM00216":["Cabeceras","Elastico","Larguero comun"],"MUECAM00238":["Cabeceras","Elastico","Larguero comun","Hilera"],"MUECAM00296":["Cabeceras","Elastico","Larguero comun","Hilera"],"MUECAM00295":["Cabeceras","Elastico","Larguero comun","Hilera"],"MUECAM00297":["Cabeceras","Elastico","Larguero comun","Hilera"],"MUECAM00067":["Cab der","Cab Izq","elastico","larguero con 3ro"],"MUECAM00068":["Cab der","Cab Izq","elastico","larguero con 3ro"],"MUECAM00069":["Cab der","Cab Izq","elastico","larguero con 3ro"],"MUECAM00070":["Cab der","Cab Izq","elastico","larguero con 3ro"],"MUECAM00345":["Cab der","Cab Izq","elastico","larguero con 3ro"],"MUECAM00063":["Cab der","Cab Izq","elastico","larguero con 3ro"],"MUECAM00049":["Cabeceras","Elastico","Larguero emotivo"],"MUECAM00050":["Cabeceras","Elastico","Larguero emotivo+ 3ero"],"MUECAM00066":["cab der","cab izq","elastico","larguero con 3ro"],"MUEGUA00070":["cuerpo"],"MUEGUA00169":["cuerpo"],"MUEGUA00073":["cuerpo"],"MUEGUA00172":["cuerpo"],"MUEGUA00074":["cuerpo"],"MUEGUA00174":["cuerpo"],"MUEGUA00224":["cuerpo"],"MUEGUA00071":["cuerpo"],"MUEGUA00033":["cuerpo"],"MUEGUA00204":["cuerpo"],"MUEGUA00055":["cuerpo"],"MUEGUA00057":["cuerpo"],"MUEGUA00167":["cuerpo"],"MUEGUA00061":["cuerpo"],"MUEGUA00019":["cuerpo"],"MUEGUA00015":["cuerpo"],"MUEGUA00027":["cuerpo"],"MUEGUA00026":["cuerpo"],"MUEGUA00029":["cuerpo"],"MUEESC00006":["tapa","baul","patas"],"MUEESC00036 MUEESC00037":["tapa","baul","lateral"],"MUEESC00004 MUEESC00020":["tapa caj","laterales","refuerzo"],"MUEESC00007":["tapa","baul","patas"],"MUEESC00010 MUEESC00029":["tapa","baul","lateral"],"MUEESC00024":["tapa","baul","laterales"],"MUEESC00038":["tapa","refuerzo","laterales"],"MUEGUA00083":["cuerpo"],"MUECAM00025 MUECAM00159 MUECAM00027":["Cabeceras","larguero","elastico"],"MUECAM00163":["Cabeceras","larguero","elastico"],"MUEGUA00056 MUEGUA00164":["cuerpo"],"MUEGUA00044 MUEGUA00150":["cajonera","L"],"MUEGUA00076":["cuerpo"],"MUEGUA00077 MUEGUA00179":["cajonera","cajonera","Lx2","colgante"],"MUECAM00095":["Cabeceras","Larguero comun","Elastico","Hilera"],"MUECAM00073":["Cab","Cab","Larguero comun","Larguero comun","Elasticos x2"],"MUECAM00074":["Cab","Cab","Larguero comun","Larguero comun","Elasticos x2"],"MUECAM00088 MUECAM00212 MUECAM00209":["cab","cab","Larguero comun","Larguero comun","Elasticos x2"],"MUECAM00089 MUECAM00208 MUECAM00210":["cab","cab","Larguero comun","Larguero comun","Elasticos x2"],"MUEACC00077 MUEACC00043":["cuerpo"],"MUEACC00075 MUEACC00042":[],"MUEACC00117":[],"MUEACC00040":[],"MUEACC00041":[],"MUEACC00052":[],"MUEACC00015":[],"MUEACC00016":[],"MUEACC00190":[]};
+// Nombres reales de los 87 productos de la planilla de referencia, para que
+// el autocompletado de "Crear etiqueta manual" funcione de entrada, sin
+// depender de que ya se haya importado antes ese producto.
+const NOMBRES_REFERENCIA = {"MUECAM00303":"Cama Superpuesta Plena C/Func y techos Bambu Biselada caj Izq","MUECAM00033":"Cama Nido Light","MUECAM00034":"Cama Nido Light 0.90","MUECAM00030":"Cama Nido Bambu","MUECAM00032":"Cama Nido Bambu 0.90/0.90","MUECUN00035":"Funcional Light Cajonera/Der.","MUECUN00036":"Funcional Light Cajonera/Der. 0.90","MUECUN00033":"Funcional Bambu Cajonera/Der.","MUECUN00034":"Funcional Bambu Cajonera/Der. 0.90","MUECAM00299":"Cama Flexa Blanca","MUECAM00301":"Cama Flexa Blanca 0.90","MUECUN00014":"Cuna Americana Light","MUECUN00055":"Cuna Americana Bambu Conejos","MUECAM00015":"Cama Light","MUECAM00016":"Cama Light 0.90","MUECAM00013":"Cama Bambu","MUECAM00014":"Cama Bambu 0.90","MUECAM00026":"Cama Montessori Light","MUECAM00164":"Cama Montessori Light 0.90","MUECAM00098":"Divan Light","MUECAM00218":"Divan Bajo Light","MUECAM00099":"Divan Light 0.90","MUECAM00219":"Divan Bajo Light 0.90","MUECAM00093":"Divan Bambu Ranurado","MUECAM00137":"Divan Bajo Bambu","MUECAM00094":"Divan Bambu Ranurado 0.90","MUECAM00216":"Divan Bajo Bambu 0.90","MUECAM00238":"Divan Light C/Hilera 3 Cajones 40Cm De Prof. Biselado","MUECAM00296":"Divan Light C/Hilera 3 Cajones 50Cm De Prof. Biselado","MUECAM00295":"Divan Light C/Hilera 3 Cajones 40Cm De Prof. Biselado 0.90","MUECAM00297":"Divan Light C/Hilera 3 Cajones 50Cm De Prof. Biselado 0.90","MUECAM00067":"Cama Puente Pleno Alta","MUECAM00068":"Cama Puente Pleno Alta 0.90","MUECAM00069":"Cama Puente Pleno Baja","MUECAM00070":"Cama Puente Pleno Baja 0.90","MUECAM00345":"Cama Dibu Arco de Futbol","MUECAM00063":"Cama Puente Pilares Baja","MUECAM00049":"Cama Nido Superior Bambu","MUECAM00050":"Cama Nido Superior Bambu 0.90","MUECAM00066":"Cama Puente Pilares Baja 0.90","MUEGUA00070":"Mesa De Luz Bambu","MUEGUA00169":"Mesa De Luz Bambu Biselada","MUEGUA00073":"Mesa De Luz Cubo 3 Cajones Emotiva","MUEGUA00172":"Mesa De Luz Cubo 3 Cajones Emotiva Biselada","MUEGUA00074":"Mesa De Luz Cubo Bambu","MUEGUA00174":"Mesa De Luz Cubo Bambu Biselada","MUEGUA00224":"Mesa De Luz Flexa Blanca","MUEGUA00071":"Mesa De Luz Light","MUEGUA00033":"Columna Pleno Biselada 4 Cajones Y Estantes","MUEGUA00204":"Ropero Light 4 Caj Ptas Pleno","MUEGUA00055":"Comoda Bambu","MUEGUA00057":"Comoda Light","MUEGUA00167":"Comoda Light 5 Cajones Largos","MUEGUA00061":"Comoda Emotiva","MUEGUA00019":"Alzada Profunda C/2 Estantes","MUEGUA00015":"Alzada Angosta C/2 Estantes","MUEGUA00027":"Chifonier Light","MUEGUA00026":"Chifonier Bambu","MUEGUA00029":"Chifonier Emotivo","MUEESC00006":"Escritorio Pleno Con Patas","MUEESC00036 MUEESC00037":"Escritorio Flexa Blanco","MUEESC00004 MUEESC00020":"Escritorio Emotivo C/2 Cajones","MUEESC00007":"Escritorio Pleno Duo Con Patas","MUEESC00010 MUEESC00029":"Escritorio Pleno Lateral Pleno Caj Der.","MUEESC00024":"Escritorio Pleno Duo Laterales Plenos","MUEESC00038":"Escritorio Pleno Simple Laterales Plenos sin Cajonera","MUEGUA00083":"Mueble Porta Jugueteros","MUECAM00025 MUECAM00159 MUECAM00027":"Cama Montessori Light 0.80 X 1.40","MUECAM00163":"Cama Montessori Light 0.90 X 1.40","MUEGUA00056 MUEGUA00164":"Comoda Bambu 6 Cajones S/Patas","MUEGUA00044 MUEGUA00150":"Columna Modular Pleno 4 Caj Y Estantes","MUEGUA00076":"Modular Colgante Pleno","MUEGUA00077 MUEGUA00179":"Modular Pleno","MUECAM00095":"Divan Bambu C/Hilera 3 Cajones 40Cm De Prof. 0.90","MUECAM00073":"Cama Superpuesta Bambu","MUECAM00074":"Cama Superpuesta Bambu 0.90","MUECAM00088 MUECAM00212 MUECAM00209":"Cama Superpuesta Plena","MUECAM00089 MUECAM00208 MUECAM00210":"Cama Superpuesta Plena 0.90","MUEACC00077 MUEACC00043":"Escalera Cajonera Baja (3 Cajones) Con Ruedas","MUEACC00075 MUEACC00042":"Escalera Cajonera Alta (4 Cajones) Con Ruedas","MUEACC00117":"Tobogan para cama Nido","MUEACC00040":"Escalera Alta Laqueada","MUEACC00041":"Escalera Baja Laqueada","MUEACC00052":"Escalera Laqueada Cama Nido","MUEACC00015":"Baranda De Proteccion 0.85","MUEACC00016":"Baranda De Proteccion 1.20","MUEACC00190":"Baranda de Proteccion Fija 0.90"};
+
 
 // ===== STATE =====
 let productos = JSON.parse(storageGet('mbt_productos', '[]'));
@@ -552,12 +557,15 @@ function initFirebase() {
   document.getElementById('fb-setup-warn').style.display = 'none';
 
   // Real-time listener
+  if(typeof unsubscribe==='function'){ try{unsubscribe();}catch(e){} }
   const { collection, onSnapshot, query, orderBy } = window._fbFns;
   const q = query(collection(db, 'bultos'), orderBy('fechaCreacion','desc'));
   unsubscribe = onSnapshot(q, (snap) => {
     productos = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
     storageSet('mbt_productos', JSON.stringify(productos));
     updateStats();
+    document.getElementById('fb-dot').className = 'fb-dot online';
+    document.getElementById('fb-label').textContent = 'en línea';
     if (document.getElementById('panel-inventario').classList.contains('active')) renderInventario();
     if (document.getElementById('panel-stock').classList.contains('active')) renderStockCards();
     if (document.getElementById('panel-etiquetas').classList.contains('active')) renderEtiquetas();
@@ -565,6 +573,9 @@ function initFirebase() {
     console.warn('Firestore error:', err);
     document.getElementById('fb-dot').className = 'fb-dot offline';
     document.getElementById('fb-label').textContent = 'sin conexión';
+    // Reintenta reconectar solo, en vez de quedar "sin conexión" para siempre
+    // hasta que alguien recargue la página a mano.
+    setTimeout(()=>{ initFirebase(); }, 5000);
   });
 }
 
@@ -1160,6 +1171,15 @@ function eliminarProducto(codigo){
 // usuario elija, sin depender de que esté en el Excel importado — para
 // productos sueltos o mientras la base de datos de referencia está incompleta.
 function mostrarCrearManual(){
+  // Junta códigos/nombres ya usados antes (historial de productos) + los 87
+  // de la tabla de referencia, para sugerir mientras se escribe.
+  const nombresPorCodigo={};
+  Object.keys(NOMBRES_REFERENCIA).forEach(cod=>{ if(NOMBRES_REFERENCIA[cod]) nombresPorCodigo[cod]=NOMBRES_REFERENCIA[cod]; });
+  productos.forEach(p=>{ if(p.codigoCentum && p.tipo) nombresPorCodigo[p.codigoCentum]=p.tipo; });
+  Object.keys(DETALLE_BULTOS).forEach(cod=>{ if(!nombresPorCodigo[cod]) nombresPorCodigo[cod]=''; });
+  const codigosConocidos=Object.keys(nombresPorCodigo).sort();
+  const nombresConocidos=[...new Set(Object.values(nombresPorCodigo).filter(Boolean))].sort();
+
   const overlay=document.createElement('div');
   overlay.id='crear-manual-overlay';
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;';
@@ -1171,11 +1191,13 @@ function mostrarCrearManual(){
       </div>
       <div class="form-group">
         <label>Código Centum (SKU)</label>
-        <input type="text" id="man-sku" placeholder="Ej: MUECAM00123" style="text-transform:uppercase;">
+        <input type="text" id="man-sku" list="man-sku-list" placeholder="Ej: MUECAM00123" style="text-transform:uppercase;" autocomplete="off">
+        <datalist id="man-sku-list">${codigosConocidos.map(c=>`<option value="${c}">`).join('')}</datalist>
       </div>
       <div class="form-group">
         <label>Nombre del producto</label>
-        <input type="text" id="man-nombre" placeholder="Ej: Cama Nido Light">
+        <input type="text" id="man-nombre" list="man-nombre-list" placeholder="Ej: Cama Nido Light" autocomplete="off">
+        <datalist id="man-nombre-list">${nombresConocidos.map(n=>`<option value="${n}">`).join('')}</datalist>
       </div>
       <div class="form-group">
         <label>Tipo</label>
@@ -1199,6 +1221,13 @@ function mostrarCrearManual(){
     </div>
   `;
   document.body.appendChild(overlay);
+  // Si el SKU elegido ya tiene un nombre conocido, completa el nombre solo
+  // (sin pisar lo que el usuario ya haya escrito a mano).
+  document.getElementById('man-sku').addEventListener('input', function(){
+    const cod=this.value.trim().toUpperCase();
+    const nombreCampo=document.getElementById('man-nombre');
+    if(nombresPorCodigo[cod] && !nombreCampo.value){ nombreCampo.value=nombresPorCodigo[cod]; }
+  });
   document.getElementById('man-tipo').addEventListener('change', function(){
     document.getElementById('man-comprobante-wrap').style.display = this.value==='pedido'?'':'none';
   });
