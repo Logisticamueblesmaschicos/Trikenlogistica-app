@@ -1252,23 +1252,33 @@ function mostrarCrearManual(){
     input.addEventListener('focus', render);
     input.addEventListener('blur', ()=>{ setTimeout(()=>{cont.style.display='none';},150); });
   }
+  let ultimoAutoNombre='', ultimoAutoSku='';
   armarAutocomplete('man-sku','man-sku-sugs',codigosConocidos, (val)=>{
     const nombreCampo=document.getElementById('man-nombre');
     const cod=val.trim().toUpperCase();
-    if(nombresPorCodigo[cod] && !nombreCampo.value){ nombreCampo.value=nombresPorCodigo[cod]; }
+    if(nombresPorCodigo[cod] && (!nombreCampo.value || nombreCampo.value===ultimoAutoNombre)){
+      nombreCampo.value=nombresPorCodigo[cod];
+      ultimoAutoNombre=nombresPorCodigo[cod];
+    }
   });
   armarAutocomplete('man-nombre','man-nombre-sugs',nombresConocidos, (val)=>{
     const skuCampo=document.getElementById('man-sku');
-    if(skuCampo.value)return; // no pisar si el usuario ya puso un SKU a mano
     const cod=Object.keys(nombresPorCodigo).find(c=>nombresPorCodigo[c]===val);
-    if(cod){ skuCampo.value=cod; }
+    if(cod && (!skuCampo.value || skuCampo.value===ultimoAutoSku)){
+      skuCampo.value=cod;
+      ultimoAutoSku=cod;
+    }
   });
-  // Si el SKU elegido ya tiene un nombre conocido, completa el nombre solo
-  // (sin pisar lo que el usuario ya haya escrito a mano) — también al tipear.
+  // Si el SKU tipeado (letra por letra, sin elegir de la lista) coincide con
+  // uno conocido, completa el nombre — y lo sigue actualizando mientras el
+  // usuario no haya escrito algo distinto a mano en ese campo.
   document.getElementById('man-sku').addEventListener('input', function(){
     const cod=this.value.trim().toUpperCase();
     const nombreCampo=document.getElementById('man-nombre');
-    if(nombresPorCodigo[cod] && !nombreCampo.value){ nombreCampo.value=nombresPorCodigo[cod]; }
+    if(nombresPorCodigo[cod] && (!nombreCampo.value || nombreCampo.value===ultimoAutoNombre)){
+      nombreCampo.value=nombresPorCodigo[cod];
+      ultimoAutoNombre=nombresPorCodigo[cod];
+    }
   });
   document.getElementById('man-tipo').addEventListener('change', function(){
     document.getElementById('man-comprobante-wrap').style.display = this.value==='pedido'?'':'none';
