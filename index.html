@@ -130,6 +130,9 @@ nav{display:flex;flex-direction:column;gap:3px;padding:18px 12px;width:200px;fle
 
 /* ===== FORM ===== */
 .form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;}
+.autocomplete-sugs{display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;max-height:180px;overflow-y:auto;z-index:20;box-shadow:0 8px 20px rgba(0,0,0,.15);margin-top:2px;}
+.autocomplete-item{padding:8px 12px;font-size:13px;cursor:pointer;}
+.autocomplete-item:hover{background:var(--tab-hover);color:var(--purple);}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
 input,select,textarea{
@@ -1189,15 +1192,15 @@ function mostrarCrearManual(){
         <span style="font-size:24px;">✏️</span>
         <h3 style="font-size:16px;font-weight:700;margin:0;">Crear etiqueta manual</h3>
       </div>
-      <div class="form-group">
+      <div class="form-group" style="position:relative;">
         <label>Código Centum (SKU)</label>
-        <input type="text" id="man-sku" list="man-sku-list" placeholder="Ej: MUECAM00123" style="text-transform:uppercase;" autocomplete="off">
-        <datalist id="man-sku-list">${codigosConocidos.map(c=>`<option value="${c}">`).join('')}</datalist>
+        <input type="text" id="man-sku" placeholder="Ej: MUECAM00123" style="text-transform:uppercase;" autocomplete="off">
+        <div id="man-sku-sugs" class="autocomplete-sugs"></div>
       </div>
-      <div class="form-group">
+      <div class="form-group" style="position:relative;">
         <label>Nombre del producto</label>
-        <input type="text" id="man-nombre" list="man-nombre-list" placeholder="Ej: Cama Nido Light" autocomplete="off">
-        <datalist id="man-nombre-list">${nombresConocidos.map(n=>`<option value="${n}">`).join('')}</datalist>
+        <input type="text" id="man-nombre" placeholder="Ej: Cama Nido Light" autocomplete="off">
+        <div id="man-nombre-sugs" class="autocomplete-sugs"></div>
       </div>
       <div class="form-group">
         <label>Tipo</label>
@@ -1221,8 +1224,39 @@ function mostrarCrearManual(){
     </div>
   `;
   document.body.appendChild(overlay);
+
+  // Autocompletado propio (no depende del <datalist> nativo del navegador,
+  // que en algunos Chrome no se muestra bien dentro de ventanas superpuestas).
+  function armarAutocomplete(inputId, sugsId, opciones, onElegir){
+    const input=document.getElementById(inputId);
+    const cont=document.getElementById(sugsId);
+    function render(){
+      const val=input.value.trim().toLowerCase();
+      const matches=val?opciones.filter(o=>o.toLowerCase().includes(val)).slice(0,8):[];
+      if(!matches.length){ cont.style.display='none'; cont.innerHTML=''; return; }
+      cont.innerHTML=matches.map(m=>`<div class="autocomplete-item" data-val="${m.replace(/"/g,'&quot;')}">${m}</div>`).join('');
+      cont.style.display='block';
+      cont.querySelectorAll('.autocomplete-item').forEach(el=>{
+        el.addEventListener('mousedown', (ev)=>{
+          ev.preventDefault();
+          input.value=el.dataset.val;
+          cont.style.display='none';
+          if(onElegir)onElegir(el.dataset.val);
+        });
+      });
+    }
+    input.addEventListener('input', render);
+    input.addEventListener('focus', render);
+    input.addEventListener('blur', ()=>{ setTimeout(()=>{cont.style.display='none';},150); });
+  }
+  armarAutocomplete('man-sku','man-sku-sugs',codigosConocidos, (val)=>{
+    const nombreCampo=document.getElementById('man-nombre');
+    const cod=val.trim().toUpperCase();
+    if(nombresPorCodigo[cod] && !nombreCampo.value){ nombreCampo.value=nombresPorCodigo[cod]; }
+  });
+  armarAutocomplete('man-nombre','man-nombre-sugs',nombresConocidos);
   // Si el SKU elegido ya tiene un nombre conocido, completa el nombre solo
-  // (sin pisar lo que el usuario ya haya escrito a mano).
+  // (sin pisar lo que el usuario ya haya escrito a mano) — también al tipear.
   document.getElementById('man-sku').addEventListener('input', function(){
     const cod=this.value.trim().toUpperCase();
     const nombreCampo=document.getElementById('man-nombre');
