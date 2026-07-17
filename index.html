@@ -13,7 +13,8 @@
 <!-- Firebase -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, getDoc, onSnapshot, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 
 // ============================================================
 // REEMPLAZAR CON TU CONFIGURACIÓN DE FIREBASE
@@ -30,6 +31,7 @@ const firebaseConfig = {
 
 let db = null;
 let fbReady = false;
+let auth = null;
 
 // La configuración de arriba viene con valores de ejemplo (PEGA-TU-...-AQUI).
 // initializeApp()/getFirestore() NO validan credenciales — solo crean objetos en
@@ -45,6 +47,7 @@ if (!configuradoCorrectamente) {
   try {
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
+    auth = getAuth(app);
     fbReady = true;
     console.log('Firebase conectado');
   } catch(e) {
@@ -55,7 +58,9 @@ if (!configuradoCorrectamente) {
 // Expose to global scope
 window._db = db;
 window._fbReady = fbReady;
-window._fbFns = { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp };
+window._fbFns = { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, getDoc, onSnapshot, query, orderBy, serverTimestamp };
+window._auth = auth;
+window._authFns = { signInWithEmailAndPassword, onAuthStateChanged, signOut };
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
@@ -103,6 +108,32 @@ header{
 /* FB STATUS */
 .fb-status{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);padding:4px 8px;border-radius:20px;border:1px solid var(--border);}
 .fb-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);}
+
+/* ===== LOGIN ===== */
+#login-screen{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:var(--bg);padding:20px;
+}
+.login-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  box-shadow:0 8px 30px rgba(0,0,0,.12);padding:36px 32px;width:100%;max-width:360px;
+}
+.login-logo{display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+.login-title{font-weight:700;font-size:18px;}
+.login-sub{font-size:12px;color:var(--muted);margin-bottom:22px;}
+.login-card .form-group{margin-bottom:14px;}
+.login-card label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;}
+.login-card input{
+  width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface2);color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;
+}
+.login-card input:focus{outline:none;border-color:var(--purple);}
+.login-error{
+  background:rgba(220,38,38,.1);color:var(--red);font-size:12px;padding:8px 10px;
+  border-radius:8px;margin-bottom:12px;
+}
+.user-badge{font-size:11px;color:var(--muted);padding:4px 10px;border-radius:20px;border:1px solid var(--border);font-weight:600;}
+
 .fb-dot.online{background:var(--green);box-shadow:0 0 0 2px rgba(34,197,94,.2);}
 .fb-dot.offline{background:var(--muted);}
 
@@ -294,6 +325,29 @@ tr:hover td{background:var(--surface2);}
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">📦</div>
+      <div class="login-title">TrikenLogística</div>
+    </div>
+    <div class="login-sub">Iniciá sesión para continuar</div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="tu@email.com" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Contraseña</label>
+      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div id="login-error" class="login-error" style="display:none;"></div>
+    <button class="btn btn-purple" style="width:100%;justify-content:center;" onclick="hacerLogin()" id="login-btn">Ingresar</button>
+    <div id="login-loading" style="display:none;text-align:center;font-size:12px;color:var(--muted);margin-top:10px;">Verificando…</div>
+  </div>
+</div>
+
+<div id="app-content" style="display:none;">
 <header>
   <div class="logo">
     <div class="logo-icon">📦</div>
@@ -310,20 +364,22 @@ tr:hover td{background:var(--surface2);}
       <div class="hstat amber"><div class="hstat-val" id="stat-sal">0</div><div class="hstat-lbl">Tránsito</div></div>
       <div class="hstat green"><div class="hstat-val" id="stat-dep">0</div><div class="hstat-lbl">Depósito</div></div>
     </div>
+    <div id="user-badge" class="user-badge"></div>
+    <button class="theme-btn" title="Cerrar sesión" onclick="hacerLogout()" id="logout-btn">🚪</button>
     <button class="theme-btn" onclick="toggleTheme()" id="theme-btn">🌙</button>
   </div>
 </header>
 
 <div class="app-layout">
 <nav>
-  <button class="tab active" onclick="showPanel('importar',this)">⬆ Importar Centum</button>
-  <button class="tab" onclick="showPanel('etiquetas',this)">🏷 Etiquetas</button>
-  <button class="tab" onclick="showPanel('salida',this)">🚛 Salida Fábrica</button>
-  <button class="tab" onclick="showPanel('entrada',this)">🏭 Recepción</button>
-  <button class="tab" onclick="showPanel('stock',this)">📊 Stock Depósito</button>
-  <button class="tab" onclick="showPanel('inventario',this)">📋 Inventario</button>
-  <button class="tab" onclick="showPanel('centum',this)">🔗 Exportar Centum</button>
-  <button class="tab" onclick="showPanel('historial',this)">🕘 Historial</button>
+  <button class="tab active" data-panel="importar" onclick="showPanel('importar',this)">⬆ Importar Centum</button>
+  <button class="tab" data-panel="etiquetas" onclick="showPanel('etiquetas',this)">🏷 Etiquetas</button>
+  <button class="tab" data-panel="salida" onclick="showPanel('salida',this)">🚛 Salida Fábrica</button>
+  <button class="tab" data-panel="entrada" onclick="showPanel('entrada',this)">🏭 Recepción</button>
+  <button class="tab" data-panel="stock" onclick="showPanel('stock',this)">📊 Stock Depósito</button>
+  <button class="tab" data-panel="inventario" onclick="showPanel('inventario',this)">📋 Inventario</button>
+  <button class="tab" data-panel="centum" onclick="showPanel('centum',this)">🔗 Exportar Centum</button>
+  <button class="tab" data-panel="historial" onclick="showPanel('historial',this)">🕘 Historial</button>
 </nav>
 
 <div class="content">
@@ -476,7 +532,7 @@ tr:hover td{background:var(--surface2);}
         <button class="filter-btn" onclick="setFiltro('transito',this)">Tránsito</button>
         <button class="filter-btn" onclick="setFiltro('deposito',this)">Depósito</button>
       </div>
-      <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red);" onclick="reiniciarTodo()">🔄 Reiniciar todo</button>
+      <button class="btn btn-outline btn-sm" id="btn-reiniciar-todo" style="color:var(--red);border-color:var(--red);" onclick="reiniciarTodo()">🔄 Reiniciar todo</button>
     </div>
   </div>
   <div class="card"><div class="table-wrap"><div id="tabla-inventario"></div></div></div>
@@ -520,6 +576,7 @@ tr:hover td{background:var(--surface2);}
 </div><!-- /app-layout -->
 <div id="print-area" style="display:none;"></div>
 <div class="toast" id="toast"></div>
+</div><!-- /app-content -->
 
 <script>
 // ===== SAFE STORAGE =====
@@ -558,6 +615,8 @@ let scanners = {};
 let lastScanned = {};
 let unsubscribe = null;
 let unsubscribeHistorial = null;
+let currentUserRole = null;
+let esDeposito = false;
 
 // ===== FIREBASE INIT =====
 function initFirebase() {
@@ -1679,8 +1738,8 @@ function renderInventario(){
     <td style="font-size:10px;color:var(--muted);">${formatFecha(p.fechaCreacion)}</td>
     <td style="font-size:10px;color:var(--muted);">${p.fechaRecepcion?formatFecha(p.fechaRecepcion):'—'}</td>
     <td>
-      ${p.bultosTotal?`<button class="btn-icon-del" title="Agregar bultos a este pedido" onclick="mostrarAgregarBultos('${p.codigo}')">➕</button>`:''}
-      <button class="btn-icon-del" title="Eliminar bulto" onclick="eliminarProducto('${p.codigo}')">🗑</button>
+      ${esDeposito ? '' : (p.bultosTotal?`<button class="btn-icon-del" title="Agregar bultos a este pedido" onclick="mostrarAgregarBultos('${p.codigo}')">➕</button>`:'')}
+      ${esDeposito ? '' : `<button class="btn-icon-del" title="Eliminar bulto" onclick="eliminarProducto('${p.codigo}')">🗑</button>`}
     </td>
   </tr>`).join('')}</tbody></table>`;
 }
@@ -1790,6 +1849,136 @@ function formatFechaCSV(iso){if(!iso)return'';const d=new Date(iso);return`${Str
 function formatFechaArchivo(d){return`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;}
 function toast(msg,type='success'){const el=document.getElementById('toast');el.textContent=msg;el.className='toast '+type+' show';clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),3200);}
 
+// ===== AUTENTICACIÓN Y ROLES =====
+const PANELES_DEPOSITO = ['entrada','stock','inventario'];
+
+function aplicarRestriccionesRol(){
+  esDeposito = currentUserRole === 'deposito';
+  document.querySelectorAll('.tab').forEach(tab=>{
+    const panel = tab.getAttribute('data-panel');
+    if (esDeposito && !PANELES_DEPOSITO.includes(panel)) {
+      tab.style.display = 'none';
+    } else {
+      tab.style.display = '';
+    }
+  });
+  const btnReiniciar = document.getElementById('btn-reiniciar-todo');
+  if (btnReiniciar) btnReiniciar.style.display = esDeposito ? 'none' : '';
+
+  // Si el panel activo no está permitido para este rol, forzamos uno permitido
+  const panelActivo = document.querySelector('.panel.active');
+  if (esDeposito && panelActivo && !PANELES_DEPOSITO.includes(panelActivo.id.replace('panel-',''))) {
+    const primerTabPermitido = document.querySelector('.tab[data-panel="entrada"]');
+    showPanel('entrada', primerTabPermitido);
+  }
+  if (document.getElementById('panel-inventario').classList.contains('active')) renderInventario();
+}
+
+function mostrarApp(){
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-content').style.display = '';
+}
+
+function mostrarLogin(msg){
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app-content').style.display = 'none';
+  const err = document.getElementById('login-error');
+  if (msg) { err.textContent = msg; err.style.display = ''; } else { err.style.display = 'none'; }
+  document.getElementById('login-loading').style.display = 'none';
+  document.getElementById('login-btn').disabled = false;
+}
+
+async function hacerLogin(){
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errBox = document.getElementById('login-error');
+  errBox.style.display = 'none';
+  if (!email || !password) {
+    errBox.textContent = 'Completá email y contraseña.';
+    errBox.style.display = '';
+    return;
+  }
+  const auth = window._auth;
+  if (!auth) {
+    errBox.textContent = 'Firebase no está configurado en este dispositivo.';
+    errBox.style.display = '';
+    return;
+  }
+  document.getElementById('login-btn').disabled = true;
+  document.getElementById('login-loading').style.display = '';
+  try {
+    const { signInWithEmailAndPassword } = window._authFns;
+    await signInWithEmailAndPassword(auth, email, password);
+    // onAuthStateChanged se encarga del resto
+  } catch(e) {
+    document.getElementById('login-loading').style.display = 'none';
+    document.getElementById('login-btn').disabled = false;
+    let msg = 'No se pudo iniciar sesión. Verificá tus datos.';
+    if (e.code === 'auth/invalid-email') msg = 'El email no es válido.';
+    if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found') msg = 'Email o contraseña incorrectos.';
+    if (e.code === 'auth/too-many-requests') msg = 'Demasiados intentos. Probá de nuevo en unos minutos.';
+    errBox.textContent = msg;
+    errBox.style.display = '';
+  }
+}
+
+// Permite enviar el formulario con Enter
+document.addEventListener('DOMContentLoaded', ()=>{
+  ['login-email','login-password'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', e=>{ if(e.key==='Enter') hacerLogin(); });
+  });
+});
+
+async function hacerLogout(){
+  const auth = window._auth;
+  if (!auth) return;
+  try {
+    const { signOut } = window._authFns;
+    if (typeof unsubscribe === 'function') { try{ unsubscribe(); }catch(e){} }
+    if (typeof unsubscribeHistorial === 'function') { try{ unsubscribeHistorial(); }catch(e){} }
+    await signOut(auth);
+  } catch(e) { console.warn('Error al cerrar sesión:', e); }
+}
+
+async function obtenerRolUsuario(uid){
+  const db = window._db;
+  const { doc, getDoc } = window._fbFns;
+  try {
+    const snap = await getDoc(doc(db, 'usuarios', uid));
+    if (snap.exists() && snap.data().rol) return snap.data().rol;
+  } catch(e) { console.warn('No se pudo leer el rol del usuario:', e); }
+  return null;
+}
+
+function initAuthListener(){
+  const auth = window._auth;
+  if (!window._fbReady || !auth) {
+    // Sin Firebase configurado: no hay autenticación posible, se usa el modo local sin login.
+    mostrarApp();
+    setTimeout(()=>{ initFirebase(); }, 800);
+    return;
+  }
+  const { onAuthStateChanged } = window._authFns;
+  onAuthStateChanged(auth, async (user)=>{
+    if (user) {
+      const rol = await obtenerRolUsuario(user.uid);
+      if (!rol) {
+        mostrarLogin('Tu usuario no tiene un rol asignado en el sistema. Contactá al administrador.');
+        return;
+      }
+      currentUserRole = rol;
+      document.getElementById('user-badge').textContent = user.email + (rol==='admin' ? ' · Admin' : ' · Depósito');
+      mostrarApp();
+      aplicarRestriccionesRol();
+      initFirebase();
+    } else {
+      currentUserRole = null;
+      mostrarLogin();
+    }
+  });
+}
+
 // ===== THEME =====
 function toggleTheme(){
   const isDark=document.documentElement.classList.toggle('dark');
@@ -1803,9 +1992,7 @@ function toggleTheme(){
 
 // ===== BOOT =====
 renderStockCards();
-setTimeout(()=>{
-  initFirebase();
-},800);
+initAuthListener();
 </script>
 </body>
 </html>
