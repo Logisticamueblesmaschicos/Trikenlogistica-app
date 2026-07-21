@@ -358,6 +358,12 @@ tr:hover td{background:var(--surface2);}
 .zl-edit-btn{position:absolute;top:6px;right:32px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(124,58,237,.9);color:#fff;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:5;opacity:.8;transition:opacity .15s,transform .15s;}
 .zl-edit-btn:hover{opacity:1;transform:scale(1.15);}
 @media print{ .zl-edit-btn{display:none!important;} }
+.zl-impreso-badge{
+  position:absolute;bottom:6px;right:6px;background:rgba(22,163,74,.92);color:#fff;
+  font-size:9px;font-weight:700;padding:3px 8px;border-radius:20px;z-index:5;
+  letter-spacing:.02em;
+}
+@media print{ .zl-impreso-badge{display:none!important;} }
 .etiquetas-grid .zebra-label:hover{box-shadow:0 4px 16px rgba(0,0,0,.15);border-color:var(--accent);}
 .zl-much-icon{width:62px;height:26px;flex-shrink:0;}
 .zl-much-icon img{width:100%;height:100%;object-fit:contain;}
@@ -658,6 +664,7 @@ tr:hover td{background:var(--surface2);}
 
 <div class="app-layout">
 <nav>
+  <button class="tab" data-panel="metricas" onclick="showPanel('metricas',this)">📈 Panel</button>
   <button class="tab active" data-panel="importar" onclick="showPanel('importar',this)">⬆ Importar Centum</button>
   <button class="tab" data-panel="etiquetas" onclick="showPanel('etiquetas',this)">🏷 Etiquetas</button>
   <button class="tab" data-panel="salida" onclick="showPanel('salida',this)">🚛 Salida Fábrica</button>
@@ -672,6 +679,20 @@ tr:hover td{background:var(--surface2);}
 <div id="saludo-banner" style="display:none;"></div>
 
 <!-- IMPORTAR -->
+<div class="panel" id="panel-metricas">
+  <div class="card">
+    <div class="card-title">📈 Panel del día</div>
+    <div id="metricas-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:12px;"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">⚠️ En tránsito hace más de 3 días</div>
+    <div id="metricas-alertas" style="margin-top:10px;"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">🔥 Más movidos esta semana</div>
+    <div id="metricas-top" style="margin-top:10px;"></div>
+  </div>
+</div>
 <div class="panel active" id="panel-importar">
   <div id="fb-setup-warn" class="warn-box" style="display:none;">
     ⚠️ <strong>Firebase no configurado.</strong> Los datos se guardan solo en este navegador. Para sincronizar entre fábrica, chofer y depósito, seguí las instrucciones en <strong>INSTRUCCIONES-FIREBASE.md</strong> y pegá tu configuración en el archivo.
@@ -908,6 +929,10 @@ let unsubscribe = null;
 let unsubscribeHistorial = null;
 let currentUserRole = null;
 let esDeposito = false;
+// Códigos "eliminados" localmente que todavía no se confirmaron en Firebase
+// (están en la ventana de "Deshacer"). Se filtran de cualquier sincronización
+// en tiempo real que llegue mientras tanto, para que no reaparezcan solos.
+const pendientesBorrado = new Set();
 
 // ===== FIREBASE INIT =====
 function initFirebase() {
@@ -928,7 +953,7 @@ function initFirebase() {
   const { collection, onSnapshot, query, orderBy } = window._fbFns;
   const q = query(collection(db, 'bultos'), orderBy('fechaCreacion','desc'));
   unsubscribe = onSnapshot(q, (snap) => {
-    productos = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
+    productos = snap.docs.map(d => ({ ...d.data(), _docId: d.id })).filter(p=>!pendientesBorrado.has(p.codigo));
     storageSet('mbt_productos', JSON.stringify(productos));
     updateStats();
     document.getElementById('fb-dot').className = 'fb-dot online';
@@ -973,7 +998,7 @@ async function fbUpdate(prod) {
   const { doc, updateDoc, serverTimestamp } = window._fbFns;
   try {
     const ref = doc(db, 'bultos', prod._docId);
-    await updateDoc(ref, { estado: prod.estado, fechaSalida: prod.fechaSalida||null, fechaRecepcion: prod.fechaRecepcion||null, detalleBulto: prod.detalleBulto||null, tipo: prod.tipo, semanaProduccion: prod.semanaProduccion||null, _ts: serverTimestamp() });
+    await updateDoc(ref, { estado: prod.estado, fechaSalida: prod.fechaSalida||null, fechaRecepcion: prod.fechaRecepcion||null, detalleBulto: prod.detalleBulto||null, tipo: prod.tipo, semanaProduccion: prod.semanaProduccion||null, impreso: prod.impreso||false, fechaImpreso: prod.fechaImpreso||null, _ts: serverTimestamp() });
   } catch(e) { console.error('fbUpdate error:', e); }
 }
 
@@ -1019,6 +1044,7 @@ function showPanel(name, el) {
   if (name==='etiquetas') renderEtiquetas();
   if (name==='centum') { renderExportaciones(); setDefaultDates(); }
   if (name==='historial') renderHistorial();
+  if (name==='metricas') renderMetricas();
 }
 
 function setDefaultDates() {
@@ -1273,6 +1299,13 @@ function renderEtiquetas(){
     editBtn.title='Nombrar este bulto';
     editBtn.addEventListener('click', (ev)=>{ ev.stopPropagation(); mostrarRenombrarBulto(p.codigo); });
     labelEl.appendChild(editBtn);
+    if(p.impreso){
+      const badge=document.createElement('div');
+      badge.className='zl-impreso-badge';
+      badge.title='Ya se imprimió antes — el '+formatFecha(p.fechaImpreso);
+      badge.innerHTML='✓ Impreso';
+      labelEl.appendChild(badge);
+    }
     grid.appendChild(labelEl);
   });
   setTimeout(()=>{
@@ -1422,6 +1455,14 @@ function confirmarEImprimir() {
     });
     setTimeout(()=>{window.print();setTimeout(()=>{pa.style.display='none';pa.innerHTML='';},500);},300);
   },100);
+  // Se marcan como impresas apenas se confirma (no cuando termina el diálogo
+  // de impresión del navegador, que no siempre avisa bien) — sirve como
+  // indicador de "esto ya salió de acá", para no reimprimir por error.
+  const ahoraImpreso=new Date().toISOString();
+  enFabrica.forEach(p=>{ p.impreso=true; p.fechaImpreso=ahoraImpreso; fbUpdate(p); });
+  save();
+  renderEtiquetas();
+  renderInventario();
 }
 
 function limpiarEtiquetas(){
@@ -1599,7 +1640,29 @@ function mostrarCrearManual(){
   Object.keys(NOMBRES_REFERENCIA).forEach(cod=>{ if(NOMBRES_REFERENCIA[cod]) nombresPorCodigo[cod]=NOMBRES_REFERENCIA[cod]; });
   Object.keys(DETALLE_BULTOS).forEach(cod=>{ if(!nombresPorCodigo[cod]) nombresPorCodigo[cod]=''; });
   const codigosConocidos=Object.keys(nombresPorCodigo).sort();
-  const nombresConocidos=[...new Set(Object.values(nombresPorCodigo).filter(Boolean))].sort();
+  // Priorizamos los nombres del catálogo de referencia (fuente confiable, los
+  // 1249 SKU) por sobre nombres sueltos que hayan quedado en el historial de
+  // Firebase (ej. etiquetas armadas a mano en el pasado con nombres tipo
+  // "COMBO - ..."). Sin esto, esos nombres viejos tapaban en el buscador a
+  // los productos reales, porque en JS las mayúsculas ordenan antes que las
+  // minúsculas al alfabetizar (y el buscador solo muestra las primeras 8).
+  const nombresCatalogo=[...new Set(Object.values(NOMBRES_REFERENCIA).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base'}));
+  const nombresHistorialExtra=[...new Set(Object.values(nombresPorCodigo).filter(Boolean))]
+    .filter(n=>!nombresCatalogo.includes(n))
+    .sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base'}));
+  const nombresConocidos=[...nombresCatalogo, ...nombresHistorialExtra];
+  // Muchos productos (sobre todo los "COMBO - ..." armados a mano en el
+  // pasado) no tienen desglose de piezas en DETALLE_BULTOS, pero SÍ tienen
+  // historial real de cuántos bultos se generaron la última vez. Usamos ese
+  // dato para sugerir la cantidad automáticamente al elegir el producto.
+  const bultosHistoricoPorCodigo={};
+  [...productos].sort((a,b)=>new Date(b.fechaCreacion||0)-new Date(a.fechaCreacion||0))
+    .forEach(p=>{
+      if(p.codigoCentum && p.bultosTotal && !bultosHistoricoPorCodigo[p.codigoCentum]){
+        bultosHistoricoPorCodigo[p.codigoCentum]=p.bultosTotal;
+      }
+    });
 
   const overlay=document.createElement('div');
   overlay.id='crear-manual-overlay';
@@ -1633,7 +1696,12 @@ function mostrarCrearManual(){
       </div>
       <div class="form-group">
         <label>Cantidad de bultos</label>
-        <input type="number" id="man-bultos" min="1" max="99" value="1">
+        <div class="bultos-ctrl" style="gap:8px;">
+          <button type="button" onclick="adjBultosManual(-1)" style="width:30px;height:30px;font-size:16px;">−</button>
+          <input type="number" id="man-bultos" min="1" max="99" value="1" style="width:56px;font-size:14px;padding:6px 4px;" oninput="document.getElementById('man-bultos-hint').textContent='';">
+          <button type="button" onclick="adjBultosManual(1)" style="width:30px;height:30px;font-size:16px;">+</button>
+        </div>
+        <div id="man-bultos-hint" style="font-size:11px;color:var(--accent);font-weight:600;margin-top:5px;min-height:14px;"></div>
       </div>
       <div class="form-group">
         <label>Semana / lote de producción (opcional)</label>
@@ -1654,7 +1722,7 @@ function mostrarCrearManual(){
     const cont=document.getElementById(sugsId);
     function render(){
       const val=input.value.trim().toLowerCase();
-      const matches=val?opciones.filter(o=>o.toLowerCase().includes(val)).slice(0,8):[];
+      const matches=val?opciones.filter(o=>o.toLowerCase().includes(val)).slice(0,12):[];
       if(!matches.length){ cont.style.display='none'; cont.innerHTML=''; return; }
       cont.innerHTML=matches.map(m=>`<div class="autocomplete-item" data-val="${m.replace(/"/g,'&quot;')}">${m}</div>`).join('');
       cont.style.display='block';
@@ -1671,7 +1739,38 @@ function mostrarCrearManual(){
     input.addEventListener('focus', render);
     input.addEventListener('blur', ()=>{ setTimeout(()=>{cont.style.display='none';},150); });
   }
-  let ultimoAutoNombre='', ultimoAutoSku='';
+  let ultimoAutoNombre='', ultimoAutoSku='', ultimoAutoBultos='';
+  function autocompletarBultos(cod){
+    const bultosCampo=document.getElementById('man-bultos');
+    const hint=document.getElementById('man-bultos-hint');
+    // Prioridad 1: la propia tabla de piezas conocidas (DETALLE_BULTOS) — si
+    // el producto tiene 5 piezas catalogadas, este dato SIEMPRE está
+    // disponible, no depende de que se haya generado antes en este
+    // dispositivo. Prioridad 2 (respaldo): el historial de Firebase, útil
+    // sobre todo para "COMBO" armados a mano que no tengan piezas cargadas.
+    const piezas = DETALLE_BULTOS[cod];
+    const porPiezas = (piezas && piezas.length>0) ? piezas.length : null;
+    const detectado = porPiezas || bultosHistoricoPorCodigo[cod] || null;
+    const origen = porPiezas ? 'catálogo' : 'historial';
+    if(detectado && (!bultosCampo.value || bultosCampo.value==='1' || bultosCampo.value===String(ultimoAutoBultos))){
+      bultosCampo.value=detectado;
+      ultimoAutoBultos=String(detectado);
+      destellar(bultosCampo);
+    }
+    if(hint){
+      hint.textContent = detectado
+        ? (origen==='catálogo'
+            ? `📋 Este producto tiene ${detectado} pieza${detectado===1?'':'s'} conocida${detectado===1?'':'s'} — usá +/− para sumar más unidades completas`
+            : `📋 Normalmente lleva ${detectado} bulto${detectado===1?'':'s'} — usá +/− si esta vez necesitás otra cantidad`)
+        : '';
+    }
+  }
+  window.adjBultosManual = function(delta){
+    const campo=document.getElementById('man-bultos');
+    const nuevo=Math.max(1, Math.min(99, (parseInt(campo.value)||1)+delta));
+    campo.value=nuevo;
+    ultimoAutoBultos=String(nuevo);
+  };
   armarAutocomplete('man-sku','man-sku-sugs',codigosConocidos, (val)=>{
     const nombreCampo=document.getElementById('man-nombre');
     const cod=val.trim().toUpperCase();
@@ -1680,6 +1779,7 @@ function mostrarCrearManual(){
       ultimoAutoNombre=nombresPorCodigo[cod];
       destellar(nombreCampo);
     }
+    autocompletarBultos(cod);
   });
   armarAutocomplete('man-nombre','man-nombre-sugs',nombresConocidos, (val)=>{
     const skuCampo=document.getElementById('man-sku');
@@ -1689,6 +1789,7 @@ function mostrarCrearManual(){
       ultimoAutoSku=cod;
       destellar(skuCampo);
     }
+    if(cod) autocompletarBultos(cod);
   });
   // Si el SKU tipeado (letra por letra, sin elegir de la lista) coincide con
   // uno conocido, completa el nombre — y lo sigue actualizando mientras el
@@ -1710,6 +1811,7 @@ function mostrarCrearManual(){
       // acabamos de completar, dando la sensación de que "no pasó nada".
       document.getElementById('man-sku-sugs').style.display='none';
     }
+    if(DETALLE_BULTOS[cod] || bultosHistoricoPorCodigo[cod]) autocompletarBultos(cod);
   });
   document.getElementById('man-tipo').addEventListener('change', function(){
     document.getElementById('man-comprobante-wrap').style.display = this.value==='pedido'?'':'none';
@@ -1843,6 +1945,59 @@ async function ejecutarAgregarBultos(codigo){
 // DETALLE_BULTOS o dejando vacío el genérico "Bulto 1 de 3". Sirve para
 // identificar a simple vista qué trae cada bulto físico, más allá de lo
 // que el sistema haya podido inferir solo.
+// Arma la "biografía" completa de un bulto puntual: combina las fechas que
+// ya guarda el propio objeto (creado, impreso, salida, recepción) con
+// cualquier entrada del historial general que lo mencione por su código
+// (ej. si se le cambió el nombre). Sirve para entender de un vistazo qué
+// pasó con ESE bulto puntual, sin tener que revisar el historial completo.
+function mostrarLineaTiempo(codigo){
+  const p=productos.find(x=>x.codigo===codigo);
+  if(!p){ toast('Ese bulto ya no existe','error'); return; }
+  const eventos=[];
+  if(p.fechaCreacion) eventos.push({fecha:p.fechaCreacion, icono:'✨', titulo:'Creado', detalle:`${p.tipo}${p.bultoNum?` — bulto ${p.bultoNum}/${p.bultosTotal}`:''}`});
+  if(p.impreso && p.fechaImpreso) eventos.push({fecha:p.fechaImpreso, icono:'🖨️', titulo:'Etiqueta impresa', detalle:''});
+  if(p.fechaSalida) eventos.push({fecha:p.fechaSalida, icono:'🚛', titulo:'Salida de Fábrica', detalle:'Pasó a Tránsito'});
+  if(p.fechaRecepcion) eventos.push({fecha:p.fechaRecepcion, icono:'🏭', titulo:'Recepción en Depósito', detalle:''});
+  historial.filter(h=>h.detalle && h.detalle.includes(`(${codigo})`) && h.accion!=='Eliminación').forEach(h=>{
+    eventos.push({fecha:h.ts, icono:'📝', titulo:h.accion, detalle:h.detalle});
+  });
+  eventos.sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+
+  const overlay=document.createElement('div');
+  overlay.id='linea-tiempo-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.onclick=(e)=>{ if(e.target===overlay) overlay.remove(); };
+  overlay.innerHTML=`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:460px;width:100%;max-height:80vh;overflow-y:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+        <span style="font-size:24px;">🕘</span>
+        <h3 style="font-size:16px;font-weight:700;margin:0;">Línea de tiempo</h3>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:4px;"><strong style="color:var(--text);">${p.tipo}</strong>${p.bultoNum?` — Bulto ${p.bultoNum}/${p.bultosTotal}`:''}</p>
+      <p style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:18px;">${p.codigo}</p>
+      <div style="border-left:2px solid var(--border);padding-left:16px;margin-left:6px;">
+        ${eventos.length ? eventos.map(ev=>`
+          <div style="position:relative;margin-bottom:18px;">
+            <div style="position:absolute;left:-24px;top:0;font-size:14px;">${ev.icono}</div>
+            <div style="font-size:13px;font-weight:700;">${ev.titulo}</div>
+            <div style="font-size:11px;color:var(--muted);margin:2px 0;">${formatFecha(ev.fecha)}</div>
+            ${ev.detalle?`<div style="font-size:12px;color:var(--text);">${ev.detalle}</div>`:''}
+          </div>
+        `).join('') : `<div style="color:var(--muted);font-size:13px;">Sin eventos registrados todavía.</div>`}
+        <div style="position:relative;">
+          <div style="position:absolute;left:-24px;top:0;font-size:14px;">📍</div>
+          <div style="font-size:13px;font-weight:700;">Estado actual</div>
+          <div style="margin-top:4px;">${estadoBadge(p.estado)}</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:18px;">
+        <button class="btn btn-primary" onclick="document.getElementById('linea-tiempo-overlay').remove()">Cerrar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
 function mostrarRenombrarBulto(codigo){
   const p=productos.find(x=>x.codigo===codigo);
   if(!p)return;
@@ -1894,31 +2049,89 @@ async function ejecutarRenombrarBulto(codigo, valorForzado){
     nuevoNombre?`nombre: "${nuevoNombre}"`:(soloQuitarNombre?'nombre eliminado':null),
     (nuevaSemana!==undefined)?`semana: "${nuevaSemana||'—'}"`:null
   ].filter(Boolean).join(', ');
-  registrarHistorial('Detalles de bulto', `${p.tipo} (bulto ${p.bultoNum}/${p.bultosTotal}): ${detalleHist||'sin cambios'}`);
+  registrarHistorial('Detalles de bulto', `${p.tipo} (bulto ${p.bultoNum}/${p.bultosTotal}) (${p.codigo}): ${detalleHist||'sin cambios'}`);
 }
 async function ejecutarEliminarProducto(codigo){
   const overlay = document.getElementById('confirm-delete-overlay');
   if (overlay) overlay.remove();
   const p=productos.find(x=>x.codigo===codigo);
   if(!p)return;
+  const indiceOriginal=productos.indexOf(p);
+  pendientesBorrado.add(codigo);
   productos=productos.filter(x=>x.codigo!==codigo);
   save();
   updateStats();
   renderInventario();
   renderStockCards();
-  toast('🗑 Bulto eliminado','success');
+  renderEtiquetas();
   registrarHistorial('Eliminación', `Se eliminó ${p.tipo} (${codigo})`);
 
-  const db=window._db;
-  const fbReady=window._fbReady;
-  if(fbReady && db && p._docId && window._fbFns){
-    const { doc, deleteDoc } = window._fbFns;
-    try{ await deleteDoc(doc(db,'bultos',p._docId)); }
-    catch(e){ console.error('Error borrando',codigo,e); }
-  }
+  // Damos unos segundos de margen (con botón "Deshacer") antes de confirmar
+  // el borrado real en Firebase — así un toque de más no es irreversible.
+  let deshecho=false;
+  toastConDeshacer(`🗑 Bulto eliminado: ${p.tipo}`, ()=>{
+    deshecho=true;
+    pendientesBorrado.delete(codigo);
+    productos.splice(Math.min(indiceOriginal,productos.length),0,p);
+    save();
+    updateStats();
+    renderInventario();
+    renderStockCards();
+    renderEtiquetas();
+    registrarHistorial('Deshacer eliminación', `Se restauró ${p.tipo} (${codigo})`);
+    toast('↩️ Bulto restaurado','success');
+  }, 6000);
+
+  setTimeout(async ()=>{
+    if(deshecho)return;
+    const db=window._db;
+    const fbReady=window._fbReady;
+    if(fbReady && db && p._docId && window._fbFns){
+      const { doc, deleteDoc } = window._fbFns;
+      try{ await deleteDoc(doc(db,'bultos',p._docId)); }
+      catch(e){ console.error('Error borrando',codigo,e); }
+    }
+    pendientesBorrado.delete(codigo);
+  }, 6200);
 }
 
 // ===== SCANNER =====
+// ===== SONIDO AL ESCANEAR =====
+// Generado con Web Audio (sin archivos externos) para dar feedback auditivo
+// al escanear — así se puede trabajar rápido sin mirar la pantalla después
+// de cada bulto. Se puede apagar desde el panel de personalización (🎨).
+let _audioCtx=null;
+function _getAudioCtx(){
+  if(storageGet('mbt_sonido_scan','si')!=='si') return null;
+  if(!_audioCtx){
+    try{ _audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; }
+  }
+  if(_audioCtx.state==='suspended') _audioCtx.resume().catch(()=>{});
+  return _audioCtx;
+}
+function _beep(freq,duracion,tipo,volumen){
+  const ctx=_getAudioCtx();
+  if(!ctx)return;
+  try{
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.type=tipo||'sine';
+    osc.frequency.value=freq;
+    gain.gain.value=volumen||0.15;
+    osc.connect(gain);gain.connect(ctx.destination);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+duracion);
+    osc.stop(ctx.currentTime+duracion);
+  }catch(e){}
+}
+function beepExito(){ _beep(880,0.11,'sine',0.16); setTimeout(()=>_beep(1300,0.10,'sine',0.14),85); }
+function beepError(){ _beep(200,0.30,'square',0.13); }
+
+function toggleSonidoScan(checked){
+  storageSet('mbt_sonido_scan', checked?'si':'no');
+  if(checked) beepExito();
+}
+
 function iniciarScanner(tipo){
   if(scanners[tipo])return;
   const prefix={salida:'sal',entrada:'ent',stock:'stk'}[tipo];
@@ -1997,27 +2210,30 @@ async function procesarScan(raw,tipo){
   if(!prod){
     resultEl.className='scan-result not-found';
     resultEl.innerHTML=`<div style="color:var(--red);font-size:15px;font-weight:700;">❌ Bulto no encontrado</div><div style="color:var(--muted);font-size:13px;">Código <strong>${codigo}</strong> no existe.</div>`;
+    beepError();
     toast('No encontrado','error');return;
   }
   const ahora=new Date();
   if(tipo==='salida'){
-    if(prod.estado!=='fabrica'){resultEl.className='scan-result not-found';resultEl.innerHTML=estadoIncorrecto(prod,'No está en Fábrica');return;}
+    if(prod.estado!=='fabrica'){resultEl.className='scan-result not-found';resultEl.innerHTML=estadoIncorrecto(prod,'No está en Fábrica');beepError();return;}
     prod.estado='transito';prod.fechaSalida=ahora.toISOString();
     await fbUpdate(prod);save();
     const pendSalida=bultosPendientesGrupo(prod,'fabrica');
     resultEl.className='scan-result found';
     resultEl.innerHTML=resultHTML('✅ Salida registrada',prod,[['Hora',formatHora(ahora)],['Estado',estadoBadge('transito')]])+avisoBultosFaltantes(pendSalida);
+    beepExito();
     agregarFila('salidas',prod);
     toast(`🚛 ${prod.tipo}${prod.bultoNum?' — Bulto '+prod.bultoNum+'/'+prod.bultosTotal:''}`, 'success');
     registrarHistorial('Salida Fábrica', `${prod.tipo}${prod.bultoNum?` — bulto ${prod.bultoNum}/${prod.bultosTotal}`:''} (${prod.codigo})`);
     if(pendSalida) toast(`⚠️ Faltan ${pendSalida.faltan} bulto${pendSalida.faltan>1?'s':''} de este pedido`,'error');
   } else {
-    if(prod.estado!=='transito'){resultEl.className='scan-result not-found';resultEl.innerHTML=estadoIncorrecto(prod,'No está en Tránsito');return;}
+    if(prod.estado!=='transito'){resultEl.className='scan-result not-found';resultEl.innerHTML=estadoIncorrecto(prod,'No está en Tránsito');beepError();return;}
     prod.estado='deposito';prod.fechaRecepcion=ahora.toISOString();
     await fbUpdate(prod);save();
     const pendEntrada=bultosPendientesGrupo(prod,'transito');
     resultEl.className='scan-result found';
     resultEl.innerHTML=resultHTML('✅ Recepción confirmada',prod,[['Salió',formatFecha(prod.fechaSalida)],['Recibido',formatHora(ahora)],['Estado',estadoBadge('deposito')]])+avisoBultosFaltantes(pendEntrada);
+    beepExito();
     agregarFila('entradas',prod);renderStockCards();
     toast(`🏭 Recibido: ${prod.tipo}`,'success');
     registrarHistorial('Recepción', `${prod.tipo}${prod.bultoNum?` — bulto ${prod.bultoNum}/${prod.bultosTotal}`:''} (${prod.codigo})`);
@@ -2045,8 +2261,9 @@ function estadoIncorrecto(prod,msg){
 }
 function procesarScanStock(codigo,prod){
   const detail=document.getElementById('scan-stock-detail');
-  if(!prod){detail.innerHTML=`<div style="color:var(--red);font-size:13px;padding:10px;background:rgba(220,38,38,.08);border-radius:8px;">❌ Código no encontrado</div>`;toast('No encontrado','error');return;}
+  if(!prod){detail.innerHTML=`<div style="color:var(--red);font-size:13px;padding:10px;background:rgba(220,38,38,.08);border-radius:8px;">❌ Código no encontrado</div>`;beepError();toast('No encontrado','error');return;}
   const color=prod.estado==='deposito'?'var(--green)':'var(--accent)';
+  beepExito();
   detail.innerHTML=`<div style="background:var(--surface2);border:1px solid ${color};border-radius:8px;padding:12px;">
     <div style="font-size:13px;font-weight:700;margin-bottom:7px;color:${color};">${prod.estado==='deposito'?'✅ En depósito':'⚠️ '+estadoLabel(prod.estado)}</div>
     <div class="result-row"><span>Producto</span><span>${prod.tipo}</span></div>
@@ -2094,7 +2311,7 @@ function renderInventario(){
   }).slice().reverse();
   const container=document.getElementById('tabla-inventario');
   if(!lista.length){container.innerHTML=`<div class="empty"><div class="empty-icon">📦</div>Sin resultados</div>`;return;}
-  container.innerHTML=`<table><thead><tr><th>Código MBT</th><th>Tipo</th><th>Cód.Centum</th><th>Producto</th><th>Bulto</th><th>Nº Pedido</th><th>Estado</th><th>Creado</th><th>Recibido</th><th></th></tr></thead>
+  container.innerHTML=`<table><thead><tr><th>Código MBT</th><th>Tipo</th><th>Cód.Centum</th><th>Producto</th><th>Bulto</th><th>Nº Pedido</th><th>Estado</th><th>Impreso</th><th>Creado</th><th>Recibido</th><th></th></tr></thead>
   <tbody>${lista.map(p=>`<tr>
     <td style="font-family:'JetBrains Mono',monospace;font-size:10px;">${p.codigo}</td>
     <td>${p.tipoProd==='pedido'?`<span class="tipo-ped">PEDIDO</span>`:`<span class="tipo-stk">STOCK</span>`}</td>
@@ -2103,9 +2320,11 @@ function renderInventario(){
     <td style="text-align:center;font-weight:700;">${p.bultoNum?p.bultoNum+'/'+p.bultosTotal:'—'}</td>
     <td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);">${p.comprobante||'—'}</td>
     <td>${estadoBadge(p.estado)}</td>
+    <td style="text-align:center;">${p.impreso?`<span title="Impreso el ${formatFecha(p.fechaImpreso)}" style="color:var(--green);font-weight:700;font-size:11px;">✓</span>`:`<span style="color:var(--muted);font-size:11px;">—</span>`}</td>
     <td style="font-size:10px;color:var(--muted);">${formatFecha(p.fechaCreacion)}</td>
     <td style="font-size:10px;color:var(--muted);">${p.fechaRecepcion?formatFecha(p.fechaRecepcion):'—'}</td>
     <td>
+      <button class="btn-icon-del" title="Ver línea de tiempo" onclick="mostrarLineaTiempo('${p.codigo}')" style="color:var(--purple);">🕘</button>
       ${esDeposito ? '' : (p.bultosTotal?`<button class="btn-icon-del" title="Agregar bultos a este pedido" onclick="mostrarAgregarBultos('${p.codigo}')">➕</button>`:'')}
       ${esDeposito ? '' : `<button class="btn-icon-del" title="Eliminar bulto" onclick="eliminarProducto('${p.codigo}')">🗑</button>`}
     </td>
@@ -2163,6 +2382,83 @@ function renderHistorial(){
     </div>
   `).join('');
 }
+function renderMetricas(){
+  const kpisEl=document.getElementById('metricas-kpis');
+  const alertasEl=document.getElementById('metricas-alertas');
+  const topEl=document.getElementById('metricas-top');
+  if(!kpisEl)return;
+  const ahora=Date.now();
+  const inicioHoy=new Date(); inicioHoy.setHours(0,0,0,0);
+  const hace7dias=ahora-7*24*60*60*1000;
+
+  const generadosHoy=productos.filter(p=>p.fechaCreacion && new Date(p.fechaCreacion).getTime()>=inicioHoy.getTime());
+  const enDeposito=productos.filter(p=>p.estado==='deposito').length;
+
+  // Bultos en tránsito hace más de 3 días (todavía no llegaron a depósito)
+  const tresDiasMs=3*24*60*60*1000;
+  const enTransitoDemorados=productos.filter(p=>
+    p.estado==='transito' && p.fechaSalida && (ahora-new Date(p.fechaSalida).getTime())>tresDiasMs
+  ).sort((a,b)=>new Date(a.fechaSalida)-new Date(b.fechaSalida));
+
+  // Tiempo promedio Fábrica → Depósito, sobre los que ya completaron el viaje
+  const completos=productos.filter(p=>p.fechaCreacion && p.fechaRecepcion);
+  let promedioHoras='—';
+  if(completos.length){
+    const totalMs=completos.reduce((acc,p)=>acc+(new Date(p.fechaRecepcion)-new Date(p.fechaCreacion)),0);
+    const promedioMs=totalMs/completos.length;
+    const horas=promedioMs/(1000*60*60);
+    promedioHoras = horas<48 ? `${horas.toFixed(1)} h` : `${(horas/24).toFixed(1)} días`;
+  }
+
+  const kpis=[
+    {label:'Bultos generados hoy', val:generadosHoy.length, color:'purple'},
+    {label:'En tránsito demorados', val:enTransitoDemorados.length, color:enTransitoDemorados.length?'red':'green'},
+    {label:'En depósito ahora', val:enDeposito, color:'green'},
+    {label:'Tiempo prom. Fábrica→Depósito', val:promedioHoras, color:'blue'},
+  ];
+  kpisEl.innerHTML=kpis.map(k=>`
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;">
+      <div style="font-size:24px;font-weight:800;color:var(--${k.color});">${k.val}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">${k.label}</div>
+    </div>`).join('');
+
+  if(!enTransitoDemorados.length){
+    alertasEl.innerHTML=`<div class="empty" style="padding:20px;"><div class="empty-icon">✅</div>Nada demorado — todo en tránsito llegó a tiempo</div>`;
+  } else {
+    alertasEl.innerHTML=enTransitoDemorados.slice(0,15).map(p=>{
+      const dias=Math.floor((ahora-new Date(p.fechaSalida).getTime())/(24*60*60*1000));
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 4px;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-size:13px;font-weight:600;">${p.tipo}${p.bultoNum?` — Bulto ${p.bultoNum}/${p.bultosTotal}`:''}</div>
+          <div style="font-size:11px;color:var(--muted);">${p.codigo}${p.comprobante?' · '+p.comprobante:''}</div>
+        </div>
+        <div style="font-size:12px;font-weight:700;color:var(--red);white-space:nowrap;">${dias} día${dias===1?'':'s'}</div>
+      </div>`;
+    }).join('');
+  }
+
+  const semana={};
+  productos.filter(p=>p.fechaCreacion && new Date(p.fechaCreacion).getTime()>=hace7dias).forEach(p=>{
+    const key=p.tipo||p.codigoCentum||'—';
+    semana[key]=(semana[key]||0)+1;
+  });
+  const topSemana=Object.entries(semana).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  if(!topSemana.length){
+    topEl.innerHTML=`<div class="empty" style="padding:20px;"><div class="empty-icon">📦</div>Sin movimientos en los últimos 7 días</div>`;
+  } else {
+    const max=topSemana[0][1];
+    topEl.innerHTML=topSemana.map(([nombre,cant])=>`
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+          <span style="font-weight:600;">${nombre}</span><span style="color:var(--muted);">${cant} bulto${cant===1?'':'s'}</span>
+        </div>
+        <div style="background:var(--surface2);border-radius:6px;height:8px;overflow:hidden;">
+          <div style="background:var(--accent-grad);height:100%;width:${(cant/max*100).toFixed(0)}%;"></div>
+        </div>
+      </div>`).join('');
+  }
+}
+
 function borrarHistorial(){
   if(!historial.length){ toast('El historial ya está vacío','error'); return; }
   const overlay=document.createElement('div');
@@ -2216,6 +2512,23 @@ function formatHora(d){return d.toLocaleDateString('es-AR')+' '+d.toLocaleTimeSt
 function formatFechaCSV(iso){if(!iso)return'';const d=new Date(iso);return`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
 function formatFechaArchivo(d){return`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;}
 function toast(msg,type='success'){const el=document.getElementById('toast');el.textContent=msg;el.className='toast '+type+' show';clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),3200);}
+// Variante con botón "Deshacer" — para acciones destructivas donde vale la
+// pena dar unos segundos de margen antes de confirmar el cambio en Firebase
+// (ej. eliminar un bulto por error de un toque).
+function toastConDeshacer(msg, callback, duracionMs){
+  const el=document.getElementById('toast');
+  clearTimeout(el._t);
+  const btnId='toast-undo-'+Date.now();
+  el.innerHTML=`<span>${msg}</span><button id="${btnId}" style="background:var(--purple);border:none;color:#fff;font-weight:700;font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer;margin-left:4px;flex-shrink:0;">↩️ Deshacer</button>`;
+  el.className='toast success show';
+  const btn=document.getElementById(btnId);
+  if(btn) btn.onclick=()=>{
+    callback();
+    el.classList.remove('show');
+    clearTimeout(el._t);
+  };
+  el._t=setTimeout(()=>{ el.classList.remove('show'); },duracionMs||6000);
+}
 
 // ===== AUTENTICACIÓN Y ROLES =====
 const PANELES_DEPOSITO = ['entrada','stock','inventario'];
@@ -2424,6 +2737,7 @@ function toggleVivido(checked){
 function mostrarPersonalizar(){
   const paletaActual = storageGet('mbt_paleta','violeta');
   const vividoActual = storageGet('mbt_vivido','no')==='si';
+  const sonidoActual = storageGet('mbt_sonido_scan','si')==='si';
   const overlay=document.createElement('div');
   overlay.id='personalizar-overlay';
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -2448,6 +2762,17 @@ function mostrarPersonalizar(){
         </div>
         <label class="switch">
           <input type="checkbox" id="vivido-checkbox" ${vividoActual?'checked':''} onchange="toggleVivido(this.checked)">
+          <span class="switch-track"></span>
+          <span class="switch-thumb"></span>
+        </label>
+      </div>
+      <div class="vivido-toggle" style="margin-top:10px;">
+        <div>
+          <div style="font-weight:600;font-size:13px;">🔊 Sonido al escanear</div>
+          <div style="font-size:11px;color:var(--muted);">Beep de confirmación al escanear un bulto</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="sonido-checkbox" ${sonidoActual?'checked':''} onchange="toggleSonidoScan(this.checked)">
           <span class="switch-track"></span>
           <span class="switch-thumb"></span>
         </label>
