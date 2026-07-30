@@ -939,6 +939,10 @@ tr:hover td{background:var(--surface2);}
       <div class="form-group"><label>Desde</label><input type="date" id="exp-desde"></div>
       <div class="form-group"><label>Hasta</label><input type="date" id="exp-hasta"></div>
     </div>
+    <div style="margin-bottom:12px;">
+      <button class="btn btn-outline btn-sm" onclick="setRangoHoy('exp')">📅 Hoy</button>
+      <button class="btn btn-outline btn-sm" onclick="setRangoDias('exp',7)">Últimos 7 días</button>
+    </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-primary" onclick="exportarCSV('stock')">⬇ Exportar CSV — Stock</button>
       <button class="btn btn-outline" onclick="exportarXLSX('stock')">📊 Exportar XLSX — Stock</button>
@@ -950,6 +954,10 @@ tr:hover td{background:var(--surface2);}
     <div class="form-grid" style="margin-bottom:12px;">
       <div class="form-group"><label>Desde</label><input type="date" id="prod-desde"></div>
       <div class="form-group"><label>Hasta</label><input type="date" id="prod-hasta"></div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <button class="btn btn-outline btn-sm" onclick="setRangoHoy('prod')">📅 Hoy</button>
+      <button class="btn btn-outline btn-sm" onclick="setRangoDias('prod',7)">Últimos 7 días</button>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-primary" onclick="exportarCSV('produccion')">⬇ Exportar CSV — Producción</button>
@@ -1179,11 +1187,24 @@ function showPanel(name, el) {
   if (name==='metricas') renderMetricas();
 }
 
+function fechaLocalISO(d){
+  // Devuelve "YYYY-MM-DD" en hora local (no UTC), para llenar los <input date>
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function setDefaultDates() {
-  const hoy=new Date().toISOString().slice(0,10);
-  const hace7=new Date(Date.now()-7*24*60*60*1000).toISOString().slice(0,10);
-  ['exp-desde','prod-desde'].forEach(id=>document.getElementById(id).value=hace7);
-  ['exp-hasta','prod-hasta'].forEach(id=>document.getElementById(id).value=hoy);
+  const hoy=fechaLocalISO(new Date());
+  const hace7=fechaLocalISO(new Date(Date.now()-7*24*60*60*1000));
+  ['exp-desde','prod-desde'].forEach(id=>{const el=document.getElementById(id); if(el)el.value=hace7;});
+  ['exp-hasta','prod-hasta'].forEach(id=>{const el=document.getElementById(id); if(el)el.value=hoy;});
+}
+function setRangoHoy(pref){
+  const hoy=fechaLocalISO(new Date());
+  document.getElementById(pref+'-desde').value=hoy;
+  document.getElementById(pref+'-hasta').value=hoy;
+}
+function setRangoDias(pref,n){
+  document.getElementById(pref+'-desde').value=fechaLocalISO(new Date(Date.now()-n*24*60*60*1000));
+  document.getElementById(pref+'-hasta').value=fechaLocalISO(new Date());
 }
 
 function updateStats() {
@@ -2571,13 +2592,25 @@ function renderInventario(){
 // producción). Usado tanto por exportarCSV como por exportarXLSX, para que
 // ambos formatos siempre muestren exactamente los mismos datos.
 function obtenerDatosExportacion(tipo){
-  const desde=new Date(document.getElementById(tipo==='stock'?'exp-desde':'prod-desde').value);
-  const hasta=new Date(document.getElementById(tipo==='stock'?'exp-hasta':'prod-hasta').value);
-  hasta.setHours(23,59,59);
+  // El input date entrega "YYYY-MM-DD". new Date(ese_texto) lo interpreta en
+  // UTC, lo que en Argentina (UTC-3) corre el rango 3 horas y deja afuera los
+  // movimientos del día. Por eso construimos las fechas en hora LOCAL:
+  // "desde" arranca a las 00:00:00 y "hasta" termina a las 23:59:59 del día
+  // elegido, en la zona horaria del navegador.
+  const valDesde=document.getElementById(tipo==='stock'?'exp-desde':'prod-desde').value;
+  const valHasta=document.getElementById(tipo==='stock'?'exp-hasta':'prod-hasta').value;
+  if(!valDesde||!valHasta){toast('Elegí las fechas Desde y Hasta','error');return {headers:[],filas:[],nombreBase:''};}
+  const [ad,md,dd]=valDesde.split('-').map(Number);
+  const [ah,mh,dh]=valHasta.split('-').map(Number);
+  const desde=new Date(ad,md-1,dd,0,0,0,0);
+  const hasta=new Date(ah,mh-1,dh,23,59,59,999);
   let filas=[],headers=[],nombreBase='';
   if(tipo==='stock'){
     headers=['Fecha','Tipo','Codigo_Centum','Codigo_MBT','Producto','Bulto_Nro','Total_Bultos','Comprobante'];
-    const reg=productos.filter(p=>p.estado==='deposito'&&p.fechaRecepcion&&new Date(p.fechaRecepcion)>=desde&&new Date(p.fechaRecepcion)<=hasta);
+    // Incluye todo lo RECIBIDO en el período, esté todavía en depósito o ya
+    // entregado — antes filtraba por estado 'deposito', y eso ocultaba los
+    // bultos que entraron y salieron el mismo día.
+    const reg=productos.filter(p=>(p.estado==='deposito'||p.estado==='entregado')&&p.fechaRecepcion&&new Date(p.fechaRecepcion)>=desde&&new Date(p.fechaRecepcion)<=hasta);
     filas=reg.map(p=>[formatFechaCSV(p.fechaRecepcion),(p.tipoProd||'stock').toUpperCase(),p.codigoCentum||'',p.codigo,p.tipo,p.bultoNum||'',p.bultosTotal||'',p.comprobante||'']);
     nombreBase=`centum_stock_${formatFechaArchivo(desde)}`;
   } else {
