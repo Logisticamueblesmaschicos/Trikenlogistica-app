@@ -2604,21 +2604,44 @@ function obtenerDatosExportacion(tipo){
   const [ah,mh,dh]=valHasta.split('-').map(Number);
   const desde=new Date(ad,md-1,dd,0,0,0,0);
   const hasta=new Date(ah,mh-1,dh,23,59,59,999);
-  let filas=[],headers=[],nombreBase='';
+
+  // Selección de bultos según el tipo de reporte y el período.
+  let reg, nombreBase;
   if(tipo==='stock'){
-    headers=['Fecha','Tipo','Codigo_Centum','Codigo_MBT','Producto','Bulto_Nro','Total_Bultos','Comprobante'];
-    // Incluye todo lo RECIBIDO en el período, esté todavía en depósito o ya
-    // entregado — antes filtraba por estado 'deposito', y eso ocultaba los
-    // bultos que entraron y salieron el mismo día.
-    const reg=productos.filter(p=>(p.estado==='deposito'||p.estado==='entregado')&&p.fechaRecepcion&&new Date(p.fechaRecepcion)>=desde&&new Date(p.fechaRecepcion)<=hasta);
-    filas=reg.map(p=>[formatFechaCSV(p.fechaRecepcion),(p.tipoProd||'stock').toUpperCase(),p.codigoCentum||'',p.codigo,p.tipo,p.bultoNum||'',p.bultosTotal||'',p.comprobante||'']);
+    // Todo lo RECIBIDO en el período (siga en depósito o ya entregado).
+    reg=productos.filter(p=>(p.estado==='deposito'||p.estado==='entregado')&&p.fechaRecepcion&&new Date(p.fechaRecepcion)>=desde&&new Date(p.fechaRecepcion)<=hasta);
     nombreBase=`centum_stock_${formatFechaArchivo(desde)}`;
   } else {
-    headers=['Fecha_Prod','Fecha_Salida','Tipo','Codigo_Centum','Codigo_MBT','Producto','Bulto_Nro','Total_Bultos','Seccion','Comprobante'];
-    const reg=productos.filter(p=>p.fechaSalida&&new Date(p.fechaSalida)>=desde&&new Date(p.fechaSalida)<=hasta);
-    filas=reg.map(p=>[formatFechaCSV(p.fechaCreacion),formatFechaCSV(p.fechaSalida),(p.tipoProd||'stock').toUpperCase(),p.codigoCentum||'',p.codigo,p.tipo,p.bultoNum||'',p.bultosTotal||'',p.seccion||'',p.comprobante||'']);
+    reg=productos.filter(p=>p.fechaSalida&&new Date(p.fechaSalida)>=desde&&new Date(p.fechaSalida)<=hasta);
     nombreBase=`centum_produccion_${formatFechaArchivo(desde)}`;
   }
+
+  // ===== AGRUPAMIENTO POR SKU =====
+  // Una sola fila por producto. Se cuentan los bultos de cada SKU separando
+  // los de STOCK de los de PEDIDO, y para los de pedido se listan los números
+  // de comprobante (sin repetir). Así el archivo queda ordenado en vez de una
+  // fila suelta por cada bulto.
+  const grupos={};
+  reg.forEach(p=>{
+    const codigo=p.codigoCentum||'(sin código)';
+    const key=codigo+'|'+(p.tipo||'');
+    if(!grupos[key]) grupos[key]={ codigo, producto:p.tipo||'', stock:0, pedido:0, comprobantes:new Set() };
+    if(p.tipoProd==='pedido'){ grupos[key].pedido++; if(p.comprobante) grupos[key].comprobantes.add(p.comprobante); }
+    else { grupos[key].stock++; }
+  });
+
+  // Orden: por código de producto (alfabético), estable y predecible.
+  const filasGrupo=Object.values(grupos).sort((a,b)=> a.codigo.localeCompare(b.codigo));
+
+  const headers=['Codigo_Centum','Producto','Cant_Stock','Cant_Pedido','Total','Pedidos'];
+  const filas=filasGrupo.map(g=>[
+    g.codigo,
+    g.producto,
+    g.stock,
+    g.pedido,
+    g.stock+g.pedido,
+    [...g.comprobantes].join(' · ')
+  ]);
   return {headers,filas,nombreBase};
 }
 function exportarCSV(tipo){
